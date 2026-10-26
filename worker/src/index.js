@@ -10,6 +10,7 @@ import { restRoute } from "./rest.js";
 import { rpcRoute } from "./rpc.js";
 import { serveFile } from "./files.js";
 import { sendQuote } from "./quotes.js";
+import { meteredDB, withMeterHeaders } from "./meter.js";
 
 // Data sync/verification scripts (worker/scripts) authenticate with the MIGRATION_TOKEN
 // secret instead of a session; removing the secret disables this path.
@@ -50,11 +51,14 @@ export default {
       }
       return new Response("Not found", { status: 404 });
     }
+    const meter = { read: 0, written: 0 };
+    let res;
     try {
-      return await route(req, env, url, ctx);
+      res = await route(req, { ...env, DB: meteredDB(env.DB, meter) }, url, ctx);
     } catch (e) {
       console.error("api error", url.pathname, e && e.stack);
-      return json({ ok: false, error: "server_error" }, 500);
+      res = json({ ok: false, error: "server_error" }, 500);
     }
+    return withMeterHeaders(res, meter);
   },
 };
