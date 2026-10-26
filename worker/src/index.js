@@ -1,306 +1,45 @@
 // Todaytec CRM — Cloudflare Worker "tdt"
-// Serves the CRM frontend (the bundled index.html) and the auth API under /api/*.
-// Accounts + password hashes live in D1 (binding DB); SMTP credentials are Worker
-// secrets (SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, MAIL_FROM) — never in the client.
-import { WorkerMailer } from "worker-mailer";
+// Serves the CRM frontend (the bundled index.html), the auth API (/api/auth, /api/users),
+// the CRM data API (/rest/v1, PostgREST-compatible, over D1) and attachments (/api/files).
+// Every data route needs a session cookie; SMTP credentials are Worker secrets.
 import INDEX_HTML from "../dist/index.html";
+import { json, headerMatchesSecret } from "./util.js";
+import { currentUser, publicAuthRoute, accountRoute } from "./auth.js";
+import { restRoute } from "./rest.js";
+import { rpcRoute } from "./rpc.js";
+import { serveFile } from "./files.js";
 
-const SESSION_COOKIE = "tdt_session";
-const SESSION_TTL_S = 30 * 24 * 3600;
-const RESET_TTL_S = 30 * 60;
-const MIN_PASSWORD = 4; // same rule as the app's reset screen (rp_short)
-const MAX_FAILS = 10; // failed logins per email per window before 429
-const FAIL_WINDOW_S = 15 * 60;
-// Fields a non-admin may not change on their own profile.
-const PROTECTED_FIELDS = ["id", "email", "role", "modules", "countries", "salesCode", "active", "_deleted", "loginCard"];
-
-const enc = new TextEncoder();
-const now = () => Math.floor(Date.now() / 1000);
-const normEmail = (s) => String(s || "").trim().toLowerCase();
-const hex = (buf) => [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, "0")).join("");
-const b64 = (buf) => btoa(String.fromCharCode(...new Uint8Array(buf)));
-const unb64 = (s) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
-const randomToken = () => hex(crypto.getRandomValues(new Uint8Array(32)));
-const sha256 = async (s) => hex(await crypto.subtle.digest("SHA-256", enc.encode(s)));
-
-function json(body, status = 200, headers = {}) {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store", ...headers },
-  });
-}
-
-/* ---------- password hashing (PBKDF2-SHA256, iterations stored per hash) ---------- */
-async function pbkdf2(password, salt, iterations) {
-  const key = await crypto.subtle.importKey("raw", enc.encode(password), "PBKDF2", false, ["deriveBits"]);
-  return new Uint8Array(await crypto.subtle.deriveBits({ name: "PBKDF2", hash: "SHA-256", salt, iterations }, key, 256));
-}
-export async function hashPassword(password, iterations) {
-  const salt = crypto.getRandomValues(new Uint8Array(16));
-  return `pbkdf2-sha256$${iterations}$${b64(salt)}$${b64(await pbkdf2(password, salt, iterations))}`;
-}
-async function verifyPassword(password, stored) {
-  const [alg, iter, salt, hash] = String(stored || "").split("$");
-  if (alg !== "pbkdf2-sha256" || !hash) return false;
-  const got = await pbkdf2(password, unb64(salt), Number(iter));
-  const want = unb64(hash);
-  return got.length === want.length && crypto.subtle.timingSafeEqual(got, want);
-}
-const iterationsOf = (env) => Number(env.PBKDF2_ITERATIONS) || 100000;
-
-/* ---------- users ---------- */
-function toPublic(row) {
-  const p = JSON.parse(row.profile || "{}");
-  delete p.password;
-  return { ...p, id: row.id, active: !!row.active, ...(row.deleted ? { _deleted: true } : {}) };
-}
-const isAdmin = (u) => !!u && (u.role === "BOD" || (Array.isArray(u.modules) && u.modules.includes("admin")));
-// Legacy duplicate emails: the newest account wins — its id carries the creation ms ("u-<ms>").
-const idTime = (id) => { const m = /(\d{6,})/.exec(id || ""); return m ? +m[1] : 0; };
-
-async function findLoginUser(env, email) {
-  const { results } = await env.DB.prepare("SELECT * FROM users WHERE email = ?1 AND active = 1 AND deleted = 0").bind(email).all();
-  return results.sort((a, b) => idTime(b.id) - idTime(a.id))[0] || null;
-}
-
-function upsertStmt(env, user) {
-  const { password, ...profile } = user;
-  return env.DB.prepare(
-    `INSERT INTO users (id, email, active, deleted, profile, updated_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6)
-     ON CONFLICT(id) DO UPDATE SET email = excluded.email, active = excluded.active, deleted = excluded.deleted,
-       profile = excluded.profile, updated_at = excluded.updated_at`
-  ).bind(String(user.id), normEmail(profile.email), profile.active === false ? 0 : 1, profile._deleted ? 1 : 0,
-    JSON.stringify(profile), new Date().toISOString());
-}
-async function setPasswordStmts(env, userId, password) {
-  return [
-    env.DB.prepare("UPDATE users SET pw_hash = ?2, pw_updated_at = ?3 WHERE id = ?1")
-      .bind(userId, await hashPassword(password, iterationsOf(env)), new Date().toISOString()),
-    // A password change signs the account out everywhere.
-    env.DB.prepare("DELETE FROM sessions WHERE user_id = ?1").bind(userId),
-  ];
-}
-
-/* ---------- sessions ---------- */
-function readCookie(req, name) {
-  const m = (req.headers.get("cookie") || "").match(new RegExp("(?:^|;\\s*)" + name + "=([^;]+)"));
-  return m ? m[1] : null;
-}
-function sessionCookie(value, maxAge) {
-  return `${SESSION_COOKIE}=${value}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${maxAge}`;
-}
-async function currentUser(req, env) {
-  const token = readCookie(req, SESSION_COOKIE);
-  if (!token) return null;
-  const row = await env.DB.prepare(
-    `SELECT u.* FROM sessions s JOIN users u ON u.id = s.user_id
-     WHERE s.token_hash = ?1 AND s.expires_at > ?2 AND u.active = 1 AND u.deleted = 0`
-  ).bind(await sha256(token), now()).first();
-  return row ? toPublic(row) : null;
-}
-
-/* ---------- mail ---------- */
-// MAIL_FROM may be "Name <addr@x>" or a bare address; worker-mailer wants { name, email }.
-function parseAddress(s) {
-  const m = /^\s*"?([^"<]*?)"?\s*<([^>]+)>\s*$/.exec(s || "");
-  return m ? { name: m[1].trim() || undefined, email: m[2].trim() } : { email: String(s || "").trim() };
-}
-async function sendMail(env, to, subject, html) {
-  const port = Number(env.SMTP_PORT || 465);
-  const from = parseAddress(env.MAIL_FROM || env.SMTP_USER);
-  const mailer = await WorkerMailer.connect({
-    host: env.SMTP_HOST || "smtp.gmail.com",
-    port,
-    secure: port === 465, // 465 = implicit TLS; 587 upgrades with STARTTLS
-    startTls: port !== 465,
-    credentials: { username: env.SMTP_USER, password: env.SMTP_PASS },
-    authType: ["plain", "login"],
-  });
-  try {
-    await mailer.send({ from, to, subject, html });
-  } finally {
-    await mailer.close();
-  }
-}
-function resetEmailHtml(appName, name, link) {
-  return `
-  <div style="font-family:Arial,Helvetica,sans-serif;max-width:480px;margin:0 auto;color:#22313F">
-    <h2 style="color:#0E7A71">${appName}</h2>
-    <p>Hi ${name || "there"},</p>
-    <p>We received a request to reset your password. Click the button below to set a new one. This link expires in ${RESET_TTL_S / 60} minutes.</p>
-    <p style="margin:24px 0">
-      <a href="${link}" style="background:#13988D;color:#fff;text-decoration:none;padding:12px 22px;border-radius:8px;font-weight:600;display:inline-block">Reset password</a>
-    </p>
-    <p style="font-size:12px;color:#64748B">If you didn't request this, you can safely ignore this email.</p>
-    <p style="font-size:12px;color:#94A3B8;word-break:break-all">${link}</p>
-  </div>`;
-}
-const escapeHtml = (s) => String(s || "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-
-/* ---------- handlers ---------- */
-async function login(req, env) {
-  const { email: rawEmail, password } = await req.json().catch(() => ({}));
-  const email = normEmail(rawEmail);
-  if (!email || !password) return json({ ok: false, error: "invalid_credentials" }, 400);
-
-  const fails = await env.DB.prepare("SELECT COUNT(*) AS n FROM login_failures WHERE email = ?1 AND ts > ?2")
-    .bind(email, now() - FAIL_WINDOW_S).first("n");
-  if (fails >= MAX_FAILS) return json({ ok: false, error: "too_many_attempts" }, 429);
-
-  const row = await findLoginUser(env, email);
-  if (!row || !(await verifyPassword(String(password), row.pw_hash))) {
-    await env.DB.prepare("INSERT INTO login_failures (email, ts) VALUES (?1, ?2)").bind(email, now()).run();
-    return json({ ok: false, error: "invalid_credentials" }, 401);
-  }
-
-  const token = randomToken();
-  await env.DB.batch([
-    env.DB.prepare("INSERT INTO sessions (token_hash, user_id, expires_at, created_at) VALUES (?1, ?2, ?3, ?4)")
-      .bind(await sha256(token), row.id, now() + SESSION_TTL_S, now()),
-    env.DB.prepare("DELETE FROM login_failures WHERE email = ?1 OR ts < ?2").bind(email, now() - FAIL_WINDOW_S),
-    env.DB.prepare("DELETE FROM sessions WHERE expires_at < ?1").bind(now()),
-  ]);
-  return json({ ok: true, user: toPublic(row) }, 200, { "set-cookie": sessionCookie(token, SESSION_TTL_S) });
-}
-
-async function logout(req, env) {
-  const token = readCookie(req, SESSION_COOKIE);
-  if (token) await env.DB.prepare("DELETE FROM sessions WHERE token_hash = ?1").bind(await sha256(token)).run();
-  return json({ ok: true }, 200, { "set-cookie": sessionCookie("", 0) });
-}
-
-// Always answers the same way so callers can't probe which emails exist; the mail
-// itself goes out in waitUntil so response timing doesn't leak it either.
-async function requestReset(req, env, url, ctx) {
-  const { email } = await req.json().catch(() => ({}));
-  const generic = json({ ok: true, message: "If that email is registered, a reset link has been sent." });
-  const row = email ? await findLoginUser(env, normEmail(email)) : null;
-  if (!row) return generic;
-
-  const token = randomToken();
-  await env.DB.prepare("INSERT INTO password_resets (token_hash, user_id, expires_at, created_at) VALUES (?1, ?2, ?3, ?4)")
-    .bind(await sha256(token), row.id, now() + RESET_TTL_S, now()).run();
-  const base = (env.APP_URL || url.origin).replace(/\/$/, "");
-  const link = `${base}/?reset=${token}`;
-  const appName = env.APP_NAME || "Todaytec CRM";
-  const profile = toPublic(row);
-  ctx.waitUntil(
-    sendMail(env, profile.email, `Reset your ${appName} password`, resetEmailHtml(escapeHtml(appName), escapeHtml(profile.name), link))
-      .catch((e) => console.error("reset mail failed", row.id, e && e.message))
-  );
-  return generic;
-}
-
-async function confirmReset(req, env) {
-  const body = await req.json().catch(() => ({}));
-  const password = String(body.newPassword || body.password || "");
-  const tokenHash = await sha256(String(body.token || ""));
-  const rec = await env.DB.prepare("SELECT * FROM password_resets WHERE token_hash = ?1 AND used = 0 AND expires_at > ?2")
-    .bind(tokenHash, now()).first();
-  if (!rec) return json({ ok: false, error: "invalid_or_expired" }, 400);
-  if (password.length < MIN_PASSWORD) return json({ ok: false, error: "too_short" }, 400);
-  await env.DB.batch([
-    ...(await setPasswordStmts(env, rec.user_id, password)),
-    env.DB.prepare("UPDATE password_resets SET used = 1 WHERE token_hash = ?1").bind(tokenHash),
-  ]);
-  return json({ ok: true });
-}
-
-async function changePassword(req, env, me) {
-  const { currentPassword, newPassword } = await req.json().catch(() => ({}));
-  const row = await env.DB.prepare("SELECT pw_hash FROM users WHERE id = ?1").bind(me.id).first();
-  if (!row || !(await verifyPassword(String(currentPassword || ""), row.pw_hash))) return json({ ok: false, error: "invalid_credentials" }, 401);
-  if (String(newPassword || "").length < MIN_PASSWORD) return json({ ok: false, error: "too_short" }, 400);
-  await env.DB.batch(await setPasswordStmts(env, me.id, String(newPassword)));
-  return json({ ok: true }, 200, { "set-cookie": sessionCookie("", 0) });
-}
-
-async function listUsers(env) {
-  const { results } = await env.DB.prepare("SELECT * FROM users ORDER BY id").all();
-  return json({ ok: true, users: results.map(toPublic) });
-}
-
-// Admins may save any account (and set an initial password); everyone else may only
-// edit their own profile, with role/scope fields kept as they are.
-async function saveUser(req, env, me, id) {
-  const body = await req.json().catch(() => null);
-  if (!body || typeof body !== "object") return json({ ok: false, error: "bad_request" }, 400);
-  const existing = await env.DB.prepare("SELECT * FROM users WHERE id = ?1").bind(id).first();
-  let user;
-  if (isAdmin(me)) {
-    user = { ...body, id };
-  } else if (me.id === id && existing) {
-    const cur = toPublic(existing);
-    user = { ...cur, ...body, id };
-    for (const k of PROTECTED_FIELDS) { if (k in cur) user[k] = cur[k]; else delete user[k]; }
-    delete user.password;
-  } else {
-    return json({ ok: false, error: "forbidden" }, 403);
-  }
-  if (!normEmail(user.email)) return json({ ok: false, error: "email_required" }, 400);
-  const stmts = [upsertStmt(env, user)];
-  if (isAdmin(me) && body.password) {
-    if (String(body.password).length < MIN_PASSWORD) return json({ ok: false, error: "too_short" }, 400);
-    stmts.push(...(await setPasswordStmts(env, id, String(body.password))));
-  }
-  if (user.active === false || user._deleted) stmts.push(env.DB.prepare("DELETE FROM sessions WHERE user_id = ?1").bind(id));
-  await env.DB.batch(stmts);
-  return json({ ok: true, user: toPublic(await env.DB.prepare("SELECT * FROM users WHERE id = ?1").bind(id).first()) });
-}
-
-async function setUserPassword(req, env, id) {
-  const { password } = await req.json().catch(() => ({}));
-  if (String(password || "").length < MIN_PASSWORD) return json({ ok: false, error: "too_short" }, 400);
-  const exists = await env.DB.prepare("SELECT 1 FROM users WHERE id = ?1").bind(id).first();
-  if (!exists) return json({ ok: false, error: "not_found" }, 404);
-  await env.DB.batch(await setPasswordStmts(env, id, String(password)));
-  return json({ ok: true });
-}
-
-async function deleteUser(env, id) {
-  const row = await env.DB.prepare("SELECT * FROM users WHERE id = ?1").bind(id).first();
-  if (!row) return json({ ok: false, error: "not_found" }, 404);
-  const profile = { ...toPublic(row), active: false, _deleted: true };
-  await env.DB.batch([upsertStmt(env, profile), env.DB.prepare("DELETE FROM sessions WHERE user_id = ?1").bind(id)]);
-  return json({ ok: true });
-}
+// Data sync/verification scripts (worker/scripts) authenticate with the MIGRATION_TOKEN
+// secret instead of a session; removing the secret disables this path.
+const SYSTEM_USER = { id: "system", name: "system", role: "BOD", system: true };
 
 async function route(req, env, url, ctx) {
   const { pathname: path } = url;
-  const method = req.method;
   // POSTs must be JSON: a cross-site <form> can't send that without a CORS preflight,
   // which this API never grants (PUT/DELETE always need one) — with SameSite=Lax that blocks CSRF.
-  if (method === "POST" && !(req.headers.get("content-type") || "").includes("application/json")) {
+  if (req.method === "POST" && !(req.headers.get("content-type") || "").includes("application/json")) {
     return json({ ok: false, error: "json_required" }, 415);
   }
 
-  if (path === "/api/auth/login" && method === "POST") return login(req, env);
-  if (path === "/api/auth/logout" && method === "POST") return logout(req, env);
-  if (path === "/api/auth/request-reset" && method === "POST") return requestReset(req, env, url, ctx);
-  if (path === "/api/auth/confirm-reset" && method === "POST") return confirmReset(req, env);
+  const open = publicAuthRoute(req, env, url, ctx);
+  if (open) return open;
 
-  const me = await currentUser(req, env);
+  const me = (await currentUser(req, env)) ||
+    ((await headerMatchesSecret(req, "x-migration-token", env.MIGRATION_TOKEN)) ? SYSTEM_USER : null);
   if (!me) return json({ ok: false, error: "unauthorized" }, 401);
 
-  if (path === "/api/auth/me" && method === "GET") return json({ ok: true, user: me });
-  if (path === "/api/auth/change-password" && method === "POST") return changePassword(req, env, me);
-  if (path === "/api/users" && method === "GET") return listUsers(env);
+  if (path.startsWith("/rest/v1/rpc/") && req.method === "POST") return rpcRoute(req, env, url);
+  if (path.startsWith("/rest/v1/")) return restRoute(req, env, url, me);
+  const file = path.match(/^\/api\/files\/([0-9a-f]{64})$/);
+  if (file && req.method === "GET") return serveFile(env, file[1], url);
 
-  const m = path.match(/^\/api\/users\/([^/]+)(\/password)?$/);
-  if (m) {
-    const id = decodeURIComponent(m[1]);
-    if (!m[2] && method === "PUT") return saveUser(req, env, me, id);
-    if (!isAdmin(me)) return json({ ok: false, error: "forbidden" }, 403);
-    if (m[2] && method === "POST") return setUserPassword(req, env, id);
-    if (!m[2] && method === "DELETE") return deleteUser(env, id);
-  }
-  return json({ ok: false, error: "not_found" }, 404);
+  return (await accountRoute(req, env, url, me)) || json({ ok: false, error: "not_found" }, 404);
 }
 
 export default {
   async fetch(req, env, ctx) {
     const url = new URL(req.url);
-    if (!url.pathname.startsWith("/api/")) {
+    if (!url.pathname.startsWith("/api/") && !url.pathname.startsWith("/rest/v1/")) {
       if ((req.method === "GET" || req.method === "HEAD") && (url.pathname === "/" || url.pathname === "/index.html")) {
         return new Response(req.method === "HEAD" ? null : INDEX_HTML, {
           headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-cache" },
