@@ -8,7 +8,9 @@
 // `pos` mark the buckets/customers a write touches as dirty; dirty ones are recomputed here
 // with the same SQL the full scans used, restricted to that bucket/customer (index ranges).
 // A date range answers its whole months from the cache and only a partial first/last month
-// from `pos` (through the date index).
+// from `pos` (through the date index). Each month also keeps its rows in output form
+// (aggf/matf), so a range of whole months is a concatenation of stored JSON — the per-row
+// work happens once per change, not per request (free plan: 10 ms CPU per request).
 import { json } from "./util.js";
 
 // Text of a JSON field, like Postgres data->>'x'.
@@ -29,34 +31,114 @@ const MONTH_WHERE = `${LIVE} AND d >= ?1 AND d <= ?2 AND d GLOB ${DATE_GLOB}`;
 const ODD_WHERE = `${LIVE} AND NOT coalesce(d GLOB ${DATE_GLOB} AND substr(d, 9, 2) BETWEEN '01' AND '31', 0)`;
 
 // Grouped rows as SQL (one row per group) and as one JSON array (for the cache).
-// dd = the PO date, kept only for the '#' bucket, whose rows are filtered by date in JS.
+// dd = the PO date, kept only for the '#' bucket, whose rows are filtered by date in JS
+// (read through the partial index of odd dates, see migrations/0003).
+const posFor = (withD) => (withD ? "pos INDEXED BY pos_odd_date" : "pos");
 const aggRows = (where, withD) => `SELECT ${jt("year")} AS yr, ${jt("month")} AS mo, upper(coalesce(pic, '')) AS pic, coalesce(cust, '') AS cust,
     ${GRP} AS grp, sum(${num("amountVnd")}) AS amount, sum(${num("sqm")}) AS sqm, count(*) AS cnt, ${withD ? "d" : "NULL"} AS dd
-  FROM pos WHERE ${where} GROUP BY 1, 2, 3, 4, 5, 9`;
+  FROM ${posFor(withD)} WHERE ${where} GROUP BY 1, 2, 3, 4, 5, 9`;
 const matRows = (where, withD) => `SELECT ${jt("year")} AS yr, ${jt("month")} AS mo, ${SRC} AS src, upper(coalesce(pic, '')) AS pic, coalesce(cust, '') AS cust,
     sum(${num("amountVnd")}) AS amount, sum(${num("sqm")}) AS sqm, count(*) AS cnt, ${withD ? "d" : "NULL"} AS dd
-  FROM pos WHERE ${where} GROUP BY 1, 2, 3, 4, 5, 9`;
-const totRows = (where) => `SELECT ${jt("year")} AS yr, CAST(${jt("month")} AS INTEGER) AS mi,
+  FROM ${posFor(withD)} WHERE ${where} GROUP BY 1, 2, 3, 4, 5, 9`;
+const totRows = (where, withD) => `SELECT ${jt("year")} AS yr, CAST(${jt("month")} AS INTEGER) AS mi,
     sum(${num("amountVnd")}) AS amount, sum(${num("sqm")}) AS sqm, count(*) AS cnt
-  FROM pos WHERE ${where} GROUP BY 1, 2`;
+  FROM ${posFor(withD)} WHERE ${where} GROUP BY 1, 2`;
 const AGG_COLS = ["yr", "mo", "pic", "cust", "grp", "amount", "sqm", "cnt", "dd"];
 const MAT_COLS = ["yr", "mo", "src", "pic", "cust", "amount", "sqm", "cnt", "dd"];
 const asJson = (sql, cols) => `(SELECT json_group_array(json_array(${cols.join(", ")})) FROM (${sql}))`;
 const refreshSql = (where, withD) => `UPDATE po_agg_cache SET
     agg = ${asJson(aggRows(where, withD), AGG_COLS)},
     mat = ${asJson(matRows(where, withD), MAT_COLS)},
-    tot = ${asJson(totRows(where), ["yr", "mi", "amount", "sqm", "cnt"])}
+    tot = ${asJson(totRows(where, withD), ["yr", "mi", "amount", "sqm", "cnt"])}
   WHERE dk = ?3 RETURNING dk, agg, mat, tot`;
 const REFRESH_MONTH = refreshSql(MONTH_WHERE, false);
 const REFRESH_ODD = refreshSql(ODD_WHERE, true).replace("?3", "'#'");
 
-// Cache rows (dk + the wanted column parsed) for the buckets a date range touches, with
-// dirty buckets recomputed first. Returns { full: [{dk, v}], partial: [dk] }: `full` buckets
-// lie wholly inside the range (or are '#', filtered by date later), `partial` months only
-// partly — those are read from `pos`.
-async function buckets(env, col, from, to) {
+// SQLite ORDER BY on text-or-null columns: NULL first, then binary text order.
+const cmpVal = (a, b) => (a === b ? 0 : a == null ? -1 : b == null ? 1 : a < b ? -1 : 1);
+const cmpBy = (keys) => (a, b) => { for (const k of keys) { const c = cmpVal(a[k], b[k]); if (c) return c; } return 0; };
+const AGG_KEYS = ["yr", "mo", "pic", "cust", "grp"];
+const MAT_KEYS = ["yr", "mo", "code", "pic", "cust"];
+const kv = (v) => (v === null || v === undefined ? "\u0002" : v);
+const keyOf = (keys) => (o) => keys.map((k) => kv(o[k])).join("\u0001");
+
+// Base material code: first token of the code source, before . space · | /
+// ("TDM240.110×300" → "TDM240"), upper-cased; "—" when there is none.
+const codeOf = (src) => { const m = src == null ? null : /^[^.\s·|/]+/.exec(src); return (m ? m[0] : "—").toUpperCase(); };
+
+// Raw entries ([yr, mo, pic|src, ...] arrays) → output rows, summed per output key. po_agg
+// entries are already one per key; material entries collapse by base code.
+function sumRows(rows, key) {
+  const out = new Map();
+  for (const o of rows) {
+    const k = key(o), cur = out.get(k);
+    if (cur) { cur.amount += o.amount; cur.sqm += o.sqm; cur.cnt += o.cnt; }
+    else out.set(k, { ...o });
+  }
+  return [...out.values()];
+}
+const aggOut = (list) => list.map((e) => ({ yr: e[0], mo: e[1], pic: e[2], cust: e[3], grp: e[4], amount: e[5], sqm: e[6], cnt: e[7] }));
+const matOut = (list) => sumRows(list.map((e) => ({ yr: e[0], mo: e[1], code: codeOf(e[2]), pic: e[3], cust: e[4], amount: e[5], sqm: e[6], cnt: e[7] })), keyOf(MAT_KEYS));
+const KINDS = {
+  agg: { rows: aggRows, cols: AGG_COLS, keys: AGG_KEYS, out: aggOut },
+  mat: { rows: matRows, cols: MAT_COLS, keys: MAT_KEYS, out: matOut },
+};
+// The one (yr, mo) shared by every entry, as JSON; '*' when there are several (or a null),
+// '' when there are none.
+function ymOf(list) {
+  let ym = "";
+  for (const e of list) {
+    if (e[0] == null || e[1] == null) return "*";
+    const k = JSON.stringify([e[0], e[1]]);
+    if (ym && k !== ym) return "*";
+    ym = k;
+  }
+  return ym;
+}
+
+// Recompute dirty buckets (one atomic UPDATE each), then store their output form (ym, aggf,
+// matf) — only if the bucket was not dirtied again meanwhile. Bucket by bucket, so a request
+// cut short still leaves the finished ones done. Returns dk → { agg, mat, tot, ym, aggf, matf }.
+async function refresh(env, dks, dirty) {
+  const got = new Map();
+  if (!dks.length) return got;
+  const stale = dks.filter((dk) => !dirty.has(dk));
+  if (stale.length) {
+    const { results } = await env.DB.prepare("SELECT dk, agg, mat, tot, ym FROM po_agg_cache WHERE dk IN (SELECT value FROM json_each(?1))").bind(JSON.stringify(stale)).all();
+    for (const r of results) if (r.agg != null) got.set(r.dk, r); else dirty.add(r.dk);
+  }
+  for (const dk of dks) {
+    let r = got.get(dk);
+    if (!r) {
+      const res = await (dk === "#" ? env.DB.prepare(REFRESH_ODD) : env.DB.prepare(REFRESH_MONTH).bind(dk + "-01", dk + "-31", dk)).all();
+      r = res.results[0] || { dk, agg: "[]", mat: "[]", tot: "[]" };
+      got.set(dk, r);
+    }
+    if (dk === "#") { if (r.ym === "*") continue; r.ym = "*"; r.aggf = r.matf = null; }
+    else {
+      const a = JSON.parse(r.agg);
+      r.ym = ymOf(a);
+      r.aggf = JSON.stringify(aggOut(a).sort(cmpBy(AGG_KEYS)));
+      r.matf = JSON.stringify(matOut(JSON.parse(r.mat)).sort(cmpBy(MAT_KEYS)));
+    }
+    await env.DB.prepare("UPDATE po_agg_cache SET ym = ?2, aggf = ?3, matf = ?4 WHERE dk = ?1 AND agg IS ?5 AND mat IS ?6")
+      .bind(dk, r.ym, r.aggf, r.matf, r.agg, r.mat).run();
+  }
+  return got;
+}
+
+const rangeOf = (args) => [args.p_from ? String(args.p_from) : null, args.p_to ? String(args.p_to) : null];
+
+// po_agg / po_agg_material over [from, to] as JSON text. Whole months come from the cache
+// in output form; a partial first/last month is read from `pos` (date index); '#' entries
+// are filtered by their date. When every piece covers one distinct (yr, mo) — the normal
+// case, a PO's year/month matching its date — the answer is the pieces' rows concatenated
+// in (yr, mo) order; otherwise the rows are merged by key and sorted.
+async function rangeRpc(env, kind, from, to) {
+  if (from != null && to != null && from > to) return "[]";
+  const K = KINDS[kind], F = kind + "f";
   const { results } = await env.DB.prepare(
-    `SELECT dk, ${col} AS v FROM po_agg_cache
+    `SELECT dk, ym, ${F} AS f, agg IS NULL AS dirty FROM po_agg_cache
      WHERE dk = '#' OR ((?1 IS NULL OR dk || '-31' >= ?1) AND (?2 IS NULL OR dk || '-01' <= ?2))`
   ).bind(from, to).all();
   const full = [], partial = [];
@@ -64,86 +146,45 @@ async function buckets(env, col, from, to) {
     if (r.dk === "#" || ((from == null || r.dk + "-01" >= from) && (to == null || r.dk + "-31" <= to))) full.push(r);
     else partial.push(r.dk);
   }
-  const dirty = full.filter((r) => r.v == null);
-  if (dirty.length) {
-    const fresh = await env.DB.batch(dirty.map((r) => (r.dk === "#" ? env.DB.prepare(REFRESH_ODD) : env.DB.prepare(REFRESH_MONTH).bind(r.dk + "-01", r.dk + "-31", r.dk))));
-    fresh.forEach((res, i) => { dirty[i].v = res.results[0] ? res.results[0][col] : "[]"; });
+  const need = full.filter((r) => r.dk === "#" || r.dirty || r.ym == null || r.f == null).map((r) => r.dk);
+  const fresh = await refresh(env, need, new Set(full.filter((r) => r.dirty).map((r) => r.dk)));
+  const pieces = [];
+  for (const r of full) {
+    if (r.dk !== "#") { const f = fresh.get(r.dk); pieces.push(f ? { ym: f.ym, text: f[F] } : { ym: r.ym, text: r.f }); continue; }
+    const di = K.cols.indexOf("dd");
+    const list = JSON.parse(fresh.get("#")[kind]).filter((e) => {
+      const d = e[di];
+      return (from == null || (d != null && d >= from)) && (to == null || (d != null && d <= to));
+    });
+    if (list.length) pieces.push({ ym: "*", rows: K.out(list) });
   }
-  return { full: full.map((r) => ({ dk: r.dk, v: JSON.parse(r.v) })), partial };
-}
-
-// Rows of the partial months, straight from `pos` through the date index.
-async function partialRows(env, rowsSql, months, from, to) {
-  if (!months.length) return [];
-  const stmts = months.map((m) => {
-    const lo = from != null && from > m + "-01" ? from : m + "-01";
-    const hi = to != null && to < m + "-31" ? to : m + "-31";
-    return env.DB.prepare(rowsSql(MONTH_WHERE, false)).bind(lo, hi);
-  });
-  return (await env.DB.batch(stmts)).flatMap((r) => r.results);
-}
-
-// Entries of the cached buckets that fall in [from, to] ('#' entries carry their date).
-function cachedEntries(full, cols, from, to) {
-  const di = cols.indexOf("dd");
-  const out = [];
-  for (const b of full) {
-    for (const e of b.v) {
-      if (b.dk === "#") {
-        const d = e[di];
-        if (from != null && !(d != null && d >= from)) continue;
-        if (to != null && !(d != null && d <= to)) continue;
-      }
-      const o = {};
-      cols.forEach((c, i) => { o[c] = e[i]; });
-      out.push(o);
+  if (partial.length) {
+    const stmts = partial.map((m) => env.DB.prepare(K.rows(MONTH_WHERE, false))
+      .bind(from != null && from > m + "-01" ? from : m + "-01", to != null && to < m + "-31" ? to : m + "-31"));
+    for (const res of await env.DB.batch(stmts)) {
+      const list = res.results.map((o) => K.cols.map((c) => o[c]));
+      if (list.length) pieces.push({ ym: ymOf(list), rows: K.out(list).sort(cmpBy(K.keys)) });
     }
   }
-  return out;
+  const live = pieces.filter((p) => p.ym !== "");
+  const yms = new Set(live.map((p) => p.ym));
+  if (!yms.has("*") && yms.size === live.length) {
+    live.sort((a, b) => { const x = JSON.parse(a.ym), y = JSON.parse(b.ym); return cmpVal(x[0], y[0]) || cmpVal(x[1], y[1]); });
+    const parts = live.map((p) => (p.text != null ? p.text : JSON.stringify(p.rows)).slice(1, -1)).filter(Boolean);
+    return "[" + parts.join(",") + "]";
+  }
+  const all = live.flatMap((p) => (p.rows ? p.rows : JSON.parse(p.text)));
+  return JSON.stringify(sumRows(all, keyOf(K.keys)).sort(cmpBy(K.keys)));
 }
 
-// SQLite ORDER BY on text-or-null columns: NULL first, then binary text order.
-const cmpVal = (a, b) => (a === b ? 0 : a == null ? -1 : b == null ? 1 : a < b ? -1 : 1);
-const cmpBy = (keys) => (a, b) => { for (const k of keys) { const c = cmpVal(a[k], b[k]); if (c) return c; } return 0; };
-
-function sumInto(map, keyCols, row, extra) {
-  const key = JSON.stringify(keyCols.map((c) => row[c]));
-  const cur = map.get(key);
-  if (cur) { cur.amount += row.amount; cur.sqm += row.sqm; cur.cnt += row.cnt; }
-  else { const o = {}; keyCols.forEach((c) => { o[c] = row[c]; }); Object.assign(o, extra, { amount: row.amount, sqm: row.sqm, cnt: row.cnt }); map.set(key, o); }
-}
-
-const rangeOf = (args) => [args.p_from ? String(args.p_from) : null, args.p_to ? String(args.p_to) : null];
-
-async function poAgg(env, args) {
-  const [from, to] = rangeOf(args);
-  if (from != null && to != null && from > to) return [];
-  const { full, partial } = await buckets(env, "agg", from, to);
-  const keys = ["yr", "mo", "pic", "cust", "grp"];
-  const out = new Map();
-  for (const r of cachedEntries(full, AGG_COLS, from, to)) sumInto(out, keys, r);
-  for (const r of await partialRows(env, aggRows, partial, from, to)) sumInto(out, keys, r);
-  return [...out.values()].sort(cmpBy(keys));
-}
-
-// Base material code: first token of the code source, before . space · | /
-// ("TDM240.110×300" → "TDM240"), upper-cased; "—" when there is none.
-const codeOf = (src) => { const m = src == null ? null : /^[^.\s·|/]+/.exec(src); return (m ? m[0] : "—").toUpperCase(); };
-async function poAggMaterial(env, args) {
-  const [from, to] = rangeOf(args);
-  if (from != null && to != null && from > to) return [];
-  const { full, partial } = await buckets(env, "mat", from, to);
-  const keys = ["yr", "mo", "code", "pic", "cust"];
-  const out = new Map();
-  const add = (r) => sumInto(out, keys, { ...r, code: codeOf(r.src) });
-  for (const r of cachedEntries(full, MAT_COLS, from, to)) add(r);
-  for (const r of await partialRows(env, matRows, partial, from, to)) add(r);
-  return [...out.values()].sort(cmpBy(keys));
-}
+const poAgg = (env, args) => rangeRpc(env, "agg", ...rangeOf(args));
+const poAggMaterial = (env, args) => rangeRpc(env, "mat", ...rangeOf(args));
 
 // Every bucket's month totals (the year filter is on the record's `year`, not its date).
 async function allTotals(env) {
-  return (await buckets(env, "tot", null, null)).full.flatMap((b) => b.v);
+  const { results } = await env.DB.prepare("SELECT dk, tot FROM po_agg_cache").all();
+  const fresh = await refresh(env, results.filter((r) => r.tot == null).map((r) => r.dk), new Set(results.filter((r) => r.tot == null).map((r) => r.dk)));
+  return results.flatMap((r) => JSON.parse(r.tot ?? fresh.get(r.dk).tot));
 }
 
 async function poCount(env) {
@@ -171,7 +212,7 @@ const STATS_COLS = ["customer_id", "po_count", "inv_count", "first_date", "last_
 const REFRESH_STATS = `WITH dirty AS MATERIALIZED (SELECT value AS cid FROM json_each(?1)),
     base AS MATERIALIZED (
       SELECT cust AS cid, d, ${num("amountVnd")} AS amt, nullif(inv_no, '') AS inv, nullif(${jt("commercial")}, '') AS prod, pic
-      FROM pos WHERE ${LIVE} AND cust IN (SELECT cid FROM dirty)
+      FROM pos INDEXED BY pos_cust WHERE ${LIVE} AND cust IN (SELECT cid FROM dirty)
     ),
     agg AS MATERIALIZED (
       SELECT cid, count(*) AS po_count, count(DISTINCT inv) AS inv_count, min(d) AS first_date, max(d) AS last_date,
@@ -221,6 +262,11 @@ export async function rpcRoute(req, env, url) {
   if (!fn) return json({ message: "function not found" }, 404);
   const args = await req.json().catch(() => ({}));
   let result = await fn(env, args || {});
+  const paged = url.searchParams.has("limit") || url.searchParams.has("offset");
+  if (typeof result === "string") {   // already JSON text
+    if (!paged) return new Response(result, { headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" } });
+    result = JSON.parse(result);
+  }
   // PostgREST applies ?limit/offset to set-returning functions (older app builds page with them).
   if (Array.isArray(result)) {
     const limit = parseInt(url.searchParams.get("limit"), 10);

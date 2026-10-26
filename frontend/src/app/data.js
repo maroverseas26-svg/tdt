@@ -694,6 +694,9 @@
     ROW_BATCH: 500,
     SHARD_BYTES: 450000,
     PAGE: 1000,
+    // PO rows are ~1 KB each: 500 per response keeps one request's body (and the Worker's
+    // CPU to build it) well inside the free plan's 10 ms per request.
+    POS_PAGE: 500,
     // Bounded RAM hydration cap: newest N POs loaded into memory at startup (full history
     // stays on the server; detail views fetch on demand). Keeps startup flat at any scale.
     RAM_CAP: 6000,
@@ -917,10 +920,11 @@
     async getRows(table, onProgress) {
       const hdr = {};
       const byId = new Map(); let after = null; let found = false;
+      const page = table === "pos" ? this.POS_PAGE : this.PAGE;
       for (;;) {
         let j = null;
         try {
-          const r = await fetch(this.url + "/" + table + "?select=id,data&order=id.asc&limit=" + this.PAGE + this._afterId(after), { headers: hdr });
+          const r = await fetch(this.url + "/" + table + "?select=id,data&order=id.asc&limit=" + page + this._afterId(after), { headers: hdr });
           if (!r.ok) break;
           j = await r.json();
         } catch (e) { break; }
@@ -932,7 +936,7 @@
           else if (d && typeof d === "object") { const id = this.idOf(d); if (id != null) this._mergeInto(byId, d, id); }
         }
         if (onProgress) try { onProgress(byId.size); } catch (e) {}
-        if (j.length < this.PAGE) break;
+        if (j.length < page) break;
         after = j[j.length - 1].id;
       }
       return found ? [...byId.values()] : null;
@@ -1031,7 +1035,7 @@
       const expected = cap || 0;   // progress denominator: the caller's cap, else unknown
       cap = cap || 20000;   // 0 / undefined → default cap
       const o = opts || {};
-      const page = 1000; let rows = []; let total = 0;
+      const page = this.POS_PAGE; let rows = []; let total = 0;
       const progress = () => { if (onProgress) try { onProgress(rows.length, expected); } catch (e) {} };
       if (o.order === "amount") {
         for (let offset = 0; ;) {
