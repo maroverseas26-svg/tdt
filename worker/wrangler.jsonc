@@ -1,0 +1,27 @@
+{
+  // Todaytec CRM — Cloudflare Worker: CRM frontend + auth API (/api/*)
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "tdt",
+  "main": "src/index.js",
+  "compatibility_date": "2026-10-01",
+  "account_id": "b644d3ffa105392fa0afdcd5aa4c7b84",
+  "workers_dev": true,
+  "preview_urls": false,
+  // The bundled frontend (dist/index.html, built from ../index.html) is imported as a
+  // Text module and served by the Worker itself.
+  "rules": [{ "type": "Text", "globs": ["**/*.html"], "fallthrough": true }],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "tdt",
+      "database_id": "4356c5cf-a108-4198-af77-f1485948b1a8",
+      "migrations_dir": "migrations"
+    }
+  ],
+  // Secrets (set with `wrangler secret put`, never committed):
+  //   SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASS, MAIL_FROM, [APP_NAME], [APP_URL]
+  "vars": {
+    "PBKDF2_ITERATIONS": "100000"
+  },
+  "observability": { "enabled": true }
+}

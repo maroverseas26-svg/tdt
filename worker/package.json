@@ -1,0 +1,16 @@
+{
+  "name": "tdt-worker",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build-assets.mjs",
+    "deploy": "npm run build && wrangler deploy",
+    "db:migrate": "wrangler d1 migrations apply tdt --remote"
+  },
+  "dependencies": {
+    "worker-mailer": "1.2.1"
+  },
+  "devDependencies": {
+    "wrangler": "4.149.0"
+  }
+}
