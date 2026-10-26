@@ -216,11 +216,11 @@
   const _M_TEAM = ["overview", "customers", "pipelines", "projects", "samples", "quotations", "polist", "products", "target", "forecast", "retention"];
   const _M_ALL = [..._M_TEAM, "admin"];
   function _u(id, name, email, role, code, country, modules, loginCard) {
-    return { id, name, email, password: "todaytec", role, salesCode: code, countries: [country], modules, active: true, avatar: (name[0] || "?").toUpperCase(), loginCard: !!loginCard };
+    return { id, name, email, role, salesCode: code, countries: [country], modules, active: true, avatar: (name[0] || "?").toUpperCase(), loginCard: !!loginCard };
   }
   const SEED_USERS = [
     _u("u-hoang", "Mr. Hoang", "hoang@todaytec.vn", "BOD", "", "*", _M_ALL, true),
-    { ..._u("u-thao", "Thao", "thaohh28@gmail.com", "BOD", "", "*", _M_ALL, true), password: "123" },
+    _u("u-thao", "Thao", "thaohh28@gmail.com", "BOD", "", "*", _M_ALL, true),
     // ---- Thailand team ----
     _u("u-noom", "Noom", "phumiphat@todaytec.co.th", "SMGR", "NOOM", "Thailand", _M_TEAM, true),
     _u("u-kook", "Kook", "Kook@todaytec.co.th", "SUPPORT", "KOOK", "Thailand", _M_TEAM, false),
@@ -673,8 +673,9 @@
     try { const v = localStorage.getItem(key); return (v && v !== "undefined" && v !== "null") ? JSON.parse(v) : fallback; } catch (e) { return fallback; }
   }
   const SB = {
-    url: "https://trmdqpgsdvujodhgyvlv.supabase.co/rest/v1",
-    key: "sb_publishable_oyNvDtCWmqijIP_DTiqlmA_3tn_W3_p",
+    // PostgREST-compatible API served by the Cloudflare Worker on this origin (D1 behind
+    // it); the session cookie authenticates every call — there is no client key any more.
+    url: "/rest/v1",
     // Tables whose blob is an ARRAY of records keyed by `id` (vs. an object keyed by
     // arbitrary keys). Array tables merge by record id; object tables merge by key.
     ARRAY_TABLES: { projects: 1, samples: 1, quotations: 1, pos: 1, forecast: 1, products: 1, users: 1, customers: 1, logs: 1, activity: 1 },
@@ -682,7 +683,7 @@
     // (rejected by the API gateway) is never sent, and localStorage's ~5 MB cap is moot
     // because each shard write is < 0.5 MB. Reads paginate, so this scales to very large
     // datasets (browser RAM becomes the only ceiling, not the storage layer).
-    SHARD_TABLES: { products: 1 },
+    SHARD_TABLES: { products: 1, logs: 1 },
     // Row-per-record tables (id = record id, data = one record): one Supabase row per PO,
     // bulk-upserted in small batches on import, one row per edit. Scales to millions.
     ROW_TABLES: { pos: 1, customers: 1, projects: 1, samples: 1, quotations: 1 },
@@ -700,7 +701,7 @@
     // A shallow {...remote,...local} clobbers a whole branch when two users edit
     // different leaves, so these merge recursively instead (see deepMergeWins).
     DEEP_TABLES: { targets: 1, targetGroups: 1, targetCust: 1, skuForecast: 1 },
-    headers() { return { apikey: this.key, Authorization: "Bearer " + this.key, "Content-Type": "application/json", Prefer: "resolution=merge-duplicates" }; },
+    headers() { return { "Content-Type": "application/json", Prefer: "resolution=merge-duplicates" }; },
     // Timestamps are written as full ISO UTC (see NOW()), but legacy rows carry the bare
     // "YYYY-MM-DD HH:mm" form, which Date() reads as LOCAL time — 7 hours adrift here, and
     // enough to make an older record win a merge. Treat a stamp with no zone as UTC.
@@ -773,7 +774,7 @@
       if (!rowId && this.DEEP_ROW_TABLES[table]) return this.getDeepShards(table);
       if (!rowId && this.SHARD_TABLES[table]) return this.getShards(table);
       try {
-        const r = await fetch(this.url + "/" + table + "?id=eq." + (rowId || "_all") + "&select=data", { headers: { apikey: this.key, Authorization: "Bearer " + this.key } });
+        const r = await fetch(this.url + "/" + table + "?id=eq." + (rowId || "_all") + "&select=data", {});
         if (!r.ok) return null;
         const j = await r.json(); return j && j[0] ? j[0].data : null;
       } catch (e) { return null; }
@@ -783,7 +784,7 @@
     // not-yet-migrated database still loads. Returns null ONLY when nothing at all exists
     // (fresh DB) so the caller keeps its code seed; [] means "explicitly empty".
     async getShards(table) {
-      const hdr = { apikey: this.key, Authorization: "Bearer " + this.key };
+      const hdr = {};
       const out = []; let found = false; let offset = 0;
       for (;;) {
         let j = null;
@@ -838,7 +839,7 @@
     // Read every key row (id = table+"~"+key), paginated, into one object; also absorbs a
     // legacy single "_all" blob if not yet migrated. Returns null ONLY when nothing exists.
     async getDeepShards(table) {
-      const hdr = { apikey: this.key, Authorization: "Bearer " + this.key };
+      const hdr = {};
       const pre = table + "~"; const out = {}; let found = false; let offset = 0;
       for (;;) {
         let j = null;
@@ -888,7 +889,7 @@
     async pushDeep(table, value, keys) {
       const v = (value && typeof value === "object" && !Array.isArray(value)) ? value : {};
       if (Array.isArray(keys) && keys.length) {
-        const hdr = { apikey: this.key, Authorization: "Bearer " + this.key }; const out = {};
+        const hdr = {}; const out = {};
         for (const k of keys) {
           let remoteVal = null;
           try { const r = await fetch(this.url + "/" + table + "?id=eq." + encodeURIComponent(table + "~" + k) + "&select=data", { headers: hdr }); if (r.ok) { const j = await r.json(); if (j && j[0]) remoteVal = j[0].data; } } catch (e) {}
@@ -910,7 +911,7 @@
     // yet-migrated table still loads. De-dupes by record id (newest _updated wins). Returns
     // null ONLY when nothing exists (fresh DB) so the caller keeps its seed. onProgress(n) per page.
     async getRows(table, onProgress) {
-      const hdr = { apikey: this.key, Authorization: "Bearer " + this.key };
+      const hdr = {};
       const byId = new Map(); let offset = 0; let found = false;
       for (;;) {
         let j = null;
@@ -989,7 +990,7 @@
       const limit = o.limit || 100, offset = o.offset || 0;
       qs += "&limit=" + limit + "&offset=" + offset;
       try {
-        const r = await fetch(this.url + "/pos" + qs, { headers: { apikey: this.key, Authorization: "Bearer " + this.key, Prefer: "count=exact", Range: offset + "-" + (offset + limit - 1), "Range-Unit": "items" } });
+        const r = await fetch(this.url + "/pos" + qs, { headers: { Prefer: "count=exact", Range: offset + "-" + (offset + limit - 1), "Range-Unit": "items" } });
         if (!r.ok) { console.warn("[SB] queryPage HTTP " + r.status); return { rows: [], total: 0, error: r.status }; }
         const j = await r.json();
         const cr = r.headers.get("content-range") || "";
@@ -1123,7 +1124,7 @@
       for (let i = 0; i < list.length; i += CH) {
         const inList = list.slice(i, i + CH).map(n => '"' + n.replace(/["\\]/g, "") + '"').join(",");
         try {
-          const r = await fetch(this.url + "/pos?select=data" + this._objGuard() + "&data->>poNumber=in.(" + encodeURIComponent(inList) + ")&or=(data->>_deleted.is.null,data->>_deleted.eq.false)&limit=10000", { headers: { apikey: this.key, Authorization: "Bearer " + this.key } });
+          const r = await fetch(this.url + "/pos?select=data" + this._objGuard() + "&data->>poNumber=in.(" + encodeURIComponent(inList) + ")&or=(data->>_deleted.is.null,data->>_deleted.eq.false)&limit=10000", {});
           if (!r.ok) { console.warn("[SB] posByPoNumbers HTTP " + r.status); continue; }
           const j = await r.json();
           if (Array.isArray(j)) j.forEach(x => { if (x && x.data) out.push(x.data); });
@@ -1133,13 +1134,13 @@
     },
     // On-demand PO fetches for DETAIL views (so full history need not live in RAM):
     async posForCustomers(customerIds) { if (!Array.isArray(customerIds) || !customerIds.length) return []; const r = await this.queryAll({ customerIds, includeDeleted: false }, 5000); return r.rows; },
-    async poById(id) { try { const r = await fetch(this.url + "/pos?id=eq." + encodeURIComponent(String(id)) + "&select=data" + this._objGuard(), { headers: { apikey: this.key, Authorization: "Bearer " + this.key } }); if (!r.ok) return null; const j = await r.json(); return (j && j[0]) ? j[0].data : null; } catch (e) { return null; } },
+    async poById(id) { try { const r = await fetch(this.url + "/pos?id=eq." + encodeURIComponent(String(id)) + "&select=data" + this._objGuard(), {}); if (!r.ok) return null; const j = await r.json(); return (j && j[0]) ? j[0].data : null; } catch (e) { return null; } },
     // Every stored record behind one PO number — TOMBSTONES INCLUDED. Feeds the "input
     // history" panel: which records a PO is really made of, when each was written, and
     // which ones were already removed. A blank PO number falls back to customer + date.
     async poHistory(poNumber, customerId, date) {
       const pn = String(poNumber == null ? "" : poNumber).trim();
-      const hdr = { apikey: this.key, Authorization: "Bearer " + this.key };
+      const hdr = {};
       let qs = "";
       if (pn) qs = "&data->>poNumber=eq." + encodeURIComponent(pn);
       else if (customerId) qs = "&data->>customerId=eq." + encodeURIComponent(String(customerId)) + (date ? "&data->>date=eq." + encodeURIComponent(String(date)) : "");
@@ -1152,7 +1153,7 @@
       } catch (e) { return []; }
     },
     // How many (live) POs a customer already has — for New/Repeat + priorCount, exact at any scale.
-    async poCountForCustomer(customerId) { try { const r = await fetch(this.url + "/pos?select=id" + this._objGuard() + "&data->>customerId=eq." + encodeURIComponent(String(customerId)) + "&or=(data->>_deleted.is.null,data->>_deleted.eq.false)", { headers: { apikey: this.key, Authorization: "Bearer " + this.key, Prefer: "count=exact", Range: "0-0", "Range-Unit": "items" } }); const cr = r.headers.get("content-range") || ""; const n = cr.indexOf("/") >= 0 ? parseInt(cr.split("/")[1], 10) : 0; return isNaN(n) ? 0 : n; } catch (e) { return 0; } },
+    async poCountForCustomer(customerId) { try { const r = await fetch(this.url + "/pos?select=id" + this._objGuard() + "&data->>customerId=eq." + encodeURIComponent(String(customerId)) + "&or=(data->>_deleted.is.null,data->>_deleted.eq.false)", { headers: { Prefer: "count=exact", Range: "0-0", "Range-Unit": "items" } }); const cr = r.headers.get("content-range") || ""; const n = cr.indexOf("/") >= 0 ? parseInt(cr.split("/")[1], 10) : 0; return isNaN(n) ? 0 : n; } catch (e) { return 0; } },
     // How many live POs use a product code (structure code / commercial name). RAM only
     // holds a date window, so deleting a price-list row must ask the server before it can
     // claim the code is unused. Returns -1 when the check itself failed.
@@ -1163,7 +1164,7 @@
         const r = await fetch(this.url + "/pos?select=id" + this._objGuard()
           + "&and=(or(data->>structureCode.eq." + encodeURIComponent(qv) + ",data->>commercial.eq." + encodeURIComponent(qv)
           + "),or(data->>_deleted.is.null,data->>_deleted.eq.false))",
-          { headers: { apikey: this.key, Authorization: "Bearer " + this.key, Prefer: "count=exact", Range: "0-0", "Range-Unit": "items" } });
+          { headers: { Prefer: "count=exact", Range: "0-0", "Range-Unit": "items" } });
         if (!r.ok) return -1;
         const cr = r.headers.get("content-range") || "";
         const n = cr.indexOf("/") >= 0 ? parseInt(cr.split("/")[1], 10) : 0;
@@ -1171,7 +1172,7 @@
       } catch (e) { return -1; }
     },
     // Find a live PO already using an invoice number (dup check) — server-side, any scale.
-    async poByInvoice(invNo, excludeId) { const n = String(invNo == null ? "" : invNo).trim(); if (!n) return null; try { const r = await fetch(this.url + "/pos?select=data" + this._objGuard() + "&data->>invNo=eq." + encodeURIComponent(n) + "&or=(data->>_deleted.is.null,data->>_deleted.eq.false)&limit=5", { headers: { apikey: this.key, Authorization: "Bearer " + this.key } }); if (!r.ok) return null; const j = await r.json(); const rows = Array.isArray(j) ? j.map(x => x.data) : []; return rows.find(p => p && p.id !== excludeId) || null; } catch (e) { return null; } },
+    async poByInvoice(invNo, excludeId) { const n = String(invNo == null ? "" : invNo).trim(); if (!n) return null; try { const r = await fetch(this.url + "/pos?select=data" + this._objGuard() + "&data->>invNo=eq." + encodeURIComponent(n) + "&or=(data->>_deleted.is.null,data->>_deleted.eq.false)&limit=5", {}); if (!r.ok) return null; const j = await r.json(); const rows = Array.isArray(j) ? j.map(x => x.data) : []; return rows.find(p => p && p.id !== excludeId) || null; } catch (e) { return null; } },
     // Customer ids a sales code owns THROUGH ITS POs. RAM only ever holds a bounded PO
     // window, so a rep's scope cannot be derived from `pos` — without this a rep whose
     // customers were never given an `owner` sees an empty CRM. Returns [] on failure
@@ -1188,7 +1189,7 @@
         for (;;) {
           let j = null;
           try {
-            const r = await fetch(this.url + "/pos?select=cid:data->>customerId" + this._objGuard() + "&data->>pic=in.(" + encodeURIComponent(inList) + ")&or=(data->>_deleted.is.null,data->>_deleted.eq.false)&limit=" + page + "&offset=" + offset, { headers: { apikey: this.key, Authorization: "Bearer " + this.key } });
+            const r = await fetch(this.url + "/pos?select=cid:data->>customerId" + this._objGuard() + "&data->>pic=in.(" + encodeURIComponent(inList) + ")&or=(data->>_deleted.is.null,data->>_deleted.eq.false)&limit=" + page + "&offset=" + offset, {});
             if (!r.ok) { console.warn("[SB] custIdsForPics HTTP " + r.status); break; }
             j = await r.json();
           } catch (e) { console.warn("[SB] custIdsForPics failed", e); break; }
@@ -1207,17 +1208,48 @@
       return await this._serialize(() => this._rpcPages("po_customer_stats", "{}", "customerStats"));
     },
   };
-  // Base URL of the deployed Supabase Edge Functions (e.g. .../functions/v1). The
-  // app POSTs to `${RESET_FN_BASE}/request-reset` and `/confirm-reset`. Public URL
-  // (not a secret) — SMTP credentials live only in the function env. Empty = disabled.
-  const RESET_FN_BASE = "https://trmdqpgsdvujodhgyvlv.supabase.co/functions/v1";
+  // Password-reset endpoints on the Worker: the app POSTs to `${RESET_FN_BASE}/request-reset`
+  // and `/confirm-reset`. SMTP credentials live only in the Worker's secrets.
+  const RESET_FN_BASE = "/api/auth";
+
+  // Account/session API on the Worker (cookie session; see worker/src/auth.js).
+  const API = {
+    async call(method, path, body) {
+      const r = await fetch(path, { method, headers: { "Content-Type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });
+      const j = await r.json().catch(() => ({}));
+      return { ...j, ok: r.ok && j.ok !== false, status: r.status };
+    },
+    me() { return this.call("GET", "/api/auth/me"); },
+    login(email, password) { return this.call("POST", "/api/auth/login", { email, password }); },
+    logout() { return this.call("POST", "/api/auth/logout", {}); },
+    users() { return this.call("GET", "/api/users"); },
+    async saveUser(u) {
+      const r = await this.call("PUT", "/api/users/" + encodeURIComponent(u.id), u);
+      if (!r.ok) console.warn("[API] save user " + u.id + " failed", r.error || r.status);
+      return r;
+    },
+  };
+  // A 401 from the data/account API means the session expired or was revoked (password
+  // change, account disabled): tell the app to show the sign-in screen.
+  if (!window.__tdtFetchWrapped) {
+    window.__tdtFetchWrapped = true;
+    const _fetch = window.fetch.bind(window);
+    window.fetch = async (input, init) => {
+      const r = await _fetch(input, init);
+      if (r.status === 401) {
+        const u = typeof input === "string" ? input : (input && input.url) || "";
+        if (/^\/(rest\/v1|api)\//.test(u) && !/^\/api\/auth\/(login|me)$/.test(u)) window.dispatchEvent(new Event("tdt:unauthorized"));
+      }
+      return r;
+    };
+  }
   // Whole-blob tables synced via saveJSON. The high-volume record tables (pos, customers,
   // projects, samples, quotations) sync ONE ROW PER RECORD, and the deep KPI tables
   // (targets, targetGroups, skuForecast) sync ONE ROW PER KEY — both from core.jsx, never
   // as one blob — so import/entry scale to ~1M without a giant POST or localStorage loss.
   const SB_MAP = {
     [LS.forecast]: "forecast",
-    [LS.products]: "products", [LS.users]: "users", [LS.custOverrides]: "custOverrides",
+    [LS.products]: "products", [LS.custOverrides]: "custOverrides",
     [LS.logs]: "logs", [LS.activity]: "activity",
   };
   function saveJSON(key, val) {
@@ -1581,7 +1613,7 @@
   ].filter(f => f.customerId).map((f, i) => ({ forecastId: "FC-" + String(i + 1).padStart(3, "0"), ...f }));
 
   window.CRM = {
-    normName, canonCodeFn, normCountry, normGroup, cleanCode, baseCode, kpiCountryOf, KPI_NONE, poPricing, rollArea, findDuplicates, parseCSV, readImportFile, parseDate, toISO, normalizePOs, SB, RESET_FN_BASE,
+    normName, canonCodeFn, normCountry, normGroup, cleanCode, baseCode, kpiCountryOf, KPI_NONE, poPricing, rollArea, findDuplicates, parseCSV, readImportFile, parseDate, toISO, normalizePOs, SB, API, RESET_FN_BASE,
     nameCodeOf, nameCodeKey, suggestNameCode, nameCodeGroups, parentMapOf, findByBizId, formatBizId, bizIdIssue, invInUse, distinctInvoices, logText,
     STATUS_TO_FUNNEL, STAGES, STAGE_KEY, STAGE_COLORS, STAGE_DEFAULT_STATUS, ALL_STATUSES,
     MODULES, MARKETS, SEED_USERS, SEED_ROLES, SEED_PROJECTS, PROJECT_STAGES, PROJECT_STAGE_COLORS, INK_TYPES,

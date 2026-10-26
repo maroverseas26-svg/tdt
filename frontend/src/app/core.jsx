@@ -42,12 +42,40 @@ function AppProvider({ children, tweaks }) {
     const saved = C.loadJSON(C.LS.users, null);
     if (!saved) return C.SEED_USERS;
     const ids = new Set(saved.map(u => u.id));
-    const merged = saved.map(u => { const s = C.SEED_USERS.find(x => x.id === u.id); return s ? { ...u, email: u.email || s.email, password: u.password || s.password } : u; }).map(canonRoleUser);
+    const merged = saved.map(({ password, ...u }) => { const s = C.SEED_USERS.find(x => x.id === u.id); return s ? { ...u, email: u.email || s.email } : u; }).map(canonRoleUser);
     C.SEED_USERS.forEach(s => { if (!ids.has(s.id)) merged.push(s); });
     return merged;
   });
-  const setUsers = (u) => { setUsersState(u); C.saveJSON(C.LS.users, u); };
+  // Accounts live in the Worker (D1): only the records that changed are PUT, one each. A
+  // password typed in the admin UI travels with that PUT once and is never kept in state.
+  const setUsers = (next) => {
+    const before = new Map(users.map(u => [u.id, JSON.stringify(u)]));
+    const clean = next.map(({ password, ...u }) => u);
+    setUsersState(clean); C.saveJSON(C.LS.users, clean);
+    next.forEach((u, i) => { if (u.password || before.get(u.id) !== JSON.stringify(clean[i])) C.API.saveUser(u); });
+  };
   const updateUser = (id, patch) => setUsers(users.map(u => u.id === id ? { ...u, ...patch } : u));
+
+  // ---- session ----
+  // The session is the Worker's HttpOnly cookie; sessionId only remembers whose it is so the
+  // UI can render at once. On load the Worker confirms it (/api/auth/me); any 401 from the
+  // data API (expired / revoked session) signs the UI out.
+  const [sessionId, setSessionId] = useState(() => C.loadJSON(C.LS.session, null));
+  const [authReady, setAuthReady] = useState(false);
+  const user = users.find(u => u.id === sessionId && u.active) || null;
+  const login = (id, profile) => {
+    if (profile) setUsersState(cur => cur.some(u => u.id === profile.id) ? cur.map(u => u.id === profile.id ? { ...u, ...profile } : u) : [...cur, profile]);
+    setSessionId(id); C.saveJSON(C.LS.session, id);
+  };
+  const dropSession = () => { setSessionId(null); C.saveJSON(C.LS.session, null); };
+  const logout = () => { C.API.logout(); dropSession(); };
+  useEffect(() => {
+    C.API.me().then(r => { if (r.ok && r.user) login(r.user.id, canonRoleUser(r.user)); else dropSession(); })
+      .catch(() => {}).finally(() => setAuthReady(true));
+    window.addEventListener("tdt:unauthorized", dropSession);
+    return () => window.removeEventListener("tdt:unauthorized", dropSession);
+  }, []);
+  const authed = authReady && !!user;
 
   const [roles, setRolesState] = useState(() => C.loadJSON(C.LS.roles, C.SEED_ROLES));
   const setRoles = (r) => { setRolesState(r); C.saveJSON(C.LS.roles, r); };
@@ -448,6 +476,7 @@ function AppProvider({ children, tweaks }) {
   const [retMonthAgg, setRetMonthAgg] = useState(null);
   const _posCountSig = posLinked.length;
   useEffect(() => {
+    if (!authed) return;
     let on = true;
     (async () => {
       try {
@@ -457,7 +486,7 @@ function AppProvider({ children, tweaks }) {
       } catch (e) { if (on) setRetStats(null); }
     })();
     return () => { on = false; };
-  }, [_posCountSig]);
+  }, [_posCountSig, authed]);
   const retentionRows = useMemo(() => {
     if (retStats) { const custById = {}; customers.forEach(c => custById[c.id] = c); return C.computeRetentionFromStats(retStats, retMonthAgg || [], targets, parentMap, custById, null); }
     return C.computeRetentionEngine(posLinked, targets, null, parentMap);
@@ -468,11 +497,6 @@ function AppProvider({ children, tweaks }) {
     const next = [{ id: "A" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), ts: new Date().toISOString().slice(0, 16).replace("T", " "), ...entry }, ...activity].slice(0, 80);
     setActivityState(next); C.saveJSON(C.LS.activity, next);
   };
-
-  const [sessionId, setSessionId] = useState(() => C.loadJSON(C.LS.session, null));
-  const user = users.find(u => u.id === sessionId && u.active) || null;
-  const login = (id) => { setSessionId(id); C.saveJSON(C.LS.session, id); };
-  const logout = () => { setSessionId(null); C.saveJSON(C.LS.session, null); };
 
   const updateCustomer = (id, patch, actName) => {
     const stamp = {
@@ -655,7 +679,7 @@ function AppProvider({ children, tweaks }) {
     else setCurrencyState("VND");
   }, [user && user.id]);
   const money = useCallback((vnd) => C.fmtMoney(vnd, currency), [currency]);
-  // ---- Supabase hydrate: pull remote rows on startup ----
+  // ---- Server hydrate: pull remote rows once signed in ----
   // Supabase is the source of truth. SB.get() returns:
   //   • null  → the row was NEVER created (brand-new database) → keep the code seed.
   //   • []    → the row EXISTS but is empty (user deleted everything) → apply it, so a
@@ -664,6 +688,7 @@ function AppProvider({ children, tweaks }) {
   // The old guard (`&& d.length`) treated an emptied table the same as a fresh DB, so
   // deleted seed data kept "coming back". We now trust any array the server returns.
   useEffect(() => {
+    if (!authed) return;
     let on = true;
     (async () => {
       // Merge remote into the CURRENT local state (union by id, newest _updated wins),
@@ -747,31 +772,19 @@ function AppProvider({ children, tweaks }) {
           try { localStorage.setItem(C.LS.custOverrides, JSON.stringify(ov)); } catch (e) {}
         }
       } catch (e) {}
-      // ---- Users: keep the local team list and the remote "users" blob in sync. ----
-      // The remote blob is authoritative for edits, password resets, and deletions
-      // (soft-deleted accounts are kept as tombstones with _deleted:true). Any seed
-      // account missing from remote is added locally AND pushed up, so server-side
-      // features (the password-reset email) can see every real account.
+      // ---- Users: the Worker's account list is authoritative (edits, password resets and
+      // soft-deletes — tombstones with _deleted:true — all happen there). ----
       try {
-        const remoteUsers = await C.SB.get("users");
-        if (on) {
-          const remote = Array.isArray(remoteUsers) ? remoteUsers : [];
-          const remoteIds = new Set(remote.map(u => u.id));
-          const additions = C.SEED_USERS.filter(s => !remoteIds.has(s.id));
-          if (remote.length) {
-            const merged = additions.length ? [...remote, ...additions] : remote;
-            setUsersState(merged);
-            try { localStorage.setItem(C.LS.users, JSON.stringify(merged)); } catch (e) {}
-            if (additions.length) C.SB.upsert("users", merged);
-          } else {
-            // remote empty (first run) — publish the current seed list so resets work
-            C.SB.upsert("users", C.SEED_USERS);
-          }
+        const r = await C.API.users();
+        if (on && r.ok && Array.isArray(r.users) && r.users.length) {
+          const list = r.users.map(canonRoleUser);
+          setUsersState(list);
+          try { localStorage.setItem(C.LS.users, JSON.stringify(list)); } catch (e) {}
         }
       } catch (e) {}
     })();
     return () => { on = false; };
-  }, []);
+  }, [authed]);
 
   // status change with auto pipeline move
   const updateStatus = (id, status) => {
@@ -1653,7 +1666,7 @@ function AppProvider({ children, tweaks }) {
   const value = {
     t, lang, setLang, users, setUsers, updateUser, roles, setRoles, roleOf,
     customers, projects: projectsLive, activity, addActivity,
-    user, isBoss, isCountryMgr, teamCodes, assignableCodes, assignablePics, allSalesCodes, login, logout, updateCustomer, updateStatus, moveToStage, addCustomer, addCustomersBulk, addContactLog,
+    user, authReady, isBoss, isCountryMgr, teamCodes, assignableCodes, assignablePics, allSalesCodes, login, logout, updateCustomer, updateStatus, moveToStage, addCustomer, addCustomersBulk, addContactLog,
     logs, addLog, logsFor,
     addProject, updateProject, scopeCustomers, scopeProjects, canSee, canEdit, canDelete, canExport, tweaks, canonCode,
     findOrCreateCustomer,
@@ -2510,7 +2523,7 @@ function readPhoto(file, cb) {
 
 /* ---------- Login ---------- */
 function LoginScreen() {
-  const { t, users, setUsers, login, lang, setLang } = useApp();
+  const { t, login, lang, setLang } = useApp();
   let remembered = null;
   try { remembered = JSON.parse(localStorage.getItem("ttcrm_login_remember") || "null"); } catch (e) {}
   const [email, setEmail] = useState(remembered ? remembered.email : "");
@@ -2538,45 +2551,18 @@ function LoginScreen() {
     setSending(false);
     setSent(true);
   };
-  // Match an email + password against a given users list. If duplicate records share
-  // the email (legacy data), the NEWEST active account wins — its id carries the
-  // creation timestamp ("u-<ms>") — so sign-in is deterministic and lines up with the
-  // "latest-wins" rule used when adding accounts.
-  const match = (list) => {
-    const em = email.trim().toLowerCase();
-    const cands = (list || []).filter(x => (x.email || "").toLowerCase() === em && x.active && !x._deleted);
-    if (!cands.length) return null;
-    const idT = (x) => { const m = /(\d{6,})/.exec(x.id || ""); return m ? +m[1] : 0; };
-    const u = cands.slice().sort((a, b) => idT(b) - idT(a))[0];
-    if (!pw || (u.password && pw !== u.password)) return null;
-    return u;
-  };
+  // Credentials are checked by the Worker (PBKDF2 hashes in D1); it answers with the
+  // profile and sets the session cookie.
   const submit = async (e) => {
     if (e) e.preventDefault();
     setErr("");
-    let u = match(users);
-    // The local users list can be stale: a password reset (or a new account) is
-    // written server-side, and this browser may not have synced it yet — so the
-    // freshly-reset password would be rejected against the old cached one. On a
-    // miss, re-pull the authoritative remote "users" blob and try once more
-    // before rejecting. (merged is built FROM remote, so it can't clobber it.)
-    if (!u) {
-      setBusy(true);
-      try {
-        const remote = await C.SB.get("users");
-        if (Array.isArray(remote) && remote.length) {
-          const remoteIds = new Set(remote.map(r => r.id));
-          const merged = [...remote, ...C.SEED_USERS.filter(s => !remoteIds.has(s.id))];
-          setUsers(merged);
-          u = match(merged);
-        }
-      } catch (_e) {}
-      setBusy(false);
-    }
-    if (!u) { setErr(t("login_invalid")); return; }
-    if (remember) localStorage.setItem("ttcrm_login_remember", JSON.stringify({ email: u.email }));
+    setBusy(true);
+    const r = await C.API.login(email.trim(), pw).catch(() => ({ ok: false }));
+    setBusy(false);
+    if (!r.ok || !r.user) { setErr(t(r.error === "too_many_attempts" ? "login_locked" : "login_invalid")); return; }
+    if (remember) localStorage.setItem("ttcrm_login_remember", JSON.stringify({ email: r.user.email }));
     else localStorage.removeItem("ttcrm_login_remember");
-    login(u.id);
+    login(r.user.id, canonRoleUser(r.user));
   };
   return (
     <div className="login-wrap">

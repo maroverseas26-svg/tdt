@@ -1577,7 +1577,7 @@ function soft(hex){
 }
 
 function Root(){
-  const { user, canSee } = useApp();
+  const { user, authReady, canSee } = useApp();
   const resetToken = React.useMemo(() => new URLSearchParams(window.location.search).get("reset"), []);
   const [page, setPage] = React.useState("overview");
   const [selCust, setSelCust] = React.useState(null);
@@ -1596,7 +1596,9 @@ function Root(){
   }, [user, page]);
 
   if (resetToken) return <ResetPasswordScreen token={resetToken} />;
-  if (!user) return <LoginScreen />;
+  // Until the Worker has confirmed the session cookie, show a blank sign-in backdrop
+  // rather than flashing the form at someone who is still signed in.
+  if (!user) return authReady ? <LoginScreen /> : <div className="login-wrap" />;
 
   const openCustomer = (id) => { setSelCust(id); setPage("customers"); };
   const openProject = (id) => { setSelProj(id); setPage("projects"); };
