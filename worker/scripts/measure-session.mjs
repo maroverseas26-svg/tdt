@@ -4,12 +4,17 @@
 // reload, logout.
 //
 //   NODE_PATH=$(npm root -g) WORKER_URL=http://127.0.0.1:8787 TEST_EMAIL=... TEST_PASSWORD=... \
-//     node scripts/measure-session.mjs [--detail]
+//     node scripts/measure-session.mjs [--detail] [--returning]
+//
+// A fresh browser also runs the app's one-time qty/sqm repair, which reads every PO once;
+// --returning marks it as already done, like any browser that has signed in before.
 import { createRequire } from "node:module";
 const { chromium } = createRequire(import.meta.url)("playwright"); // resolved via NODE_PATH
 const BASE = (process.env.WORKER_URL || "http://127.0.0.1:8787").replace(/\/$/, "");
 const EMAIL = process.env.TEST_EMAIL, PASSWORD = process.env.TEST_PASSWORD;
 const DETAIL = process.argv.includes("--detail");
+const DETAIL_W = +(process.env.DETAIL_WIDTH || 160);
+const RETURNING = process.argv.includes("--returning");
 if (!EMAIL || !PASSWORD) { console.error("TEST_EMAIL and TEST_PASSWORD are required"); process.exit(1); }
 
 // Nav labels (en / vi), in session order.
@@ -32,8 +37,9 @@ page.on("response", async (res) => {
   total.read += r; total.written += w; total.requests++;
   step.read += r; step.written += w; step.requests++;
   const u = new URL(res.url());
-  step.calls.push({ read: r, written: w, path: res.request().method() + " " + decodeURIComponent(u.pathname + u.search).slice(0, 160) });
+  step.calls.push({ read: r, written: w, path: res.request().method() + " " + decodeURIComponent(u.pathname + u.search).slice(0, DETAIL_W) });
 });
+if (RETURNING) await page.addInitScript(() => localStorage.setItem("ttcrm_qty_sqm_fix_v1", "1"));
 page.on("pageerror", (e) => console.error("pageerror:", e.message));
 
 async function settle() {

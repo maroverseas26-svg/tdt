@@ -743,7 +743,7 @@ function AppProvider({ children, tweaks }) {
       // demand. Stale whole-table localStorage is cleared so it can never resurrect.
       (async () => {
         try {
-          const r = await C.SB.queryAll({ order: "date", dir: "desc" }, C.SB.RAM_CAP || 6000,
+          const r = await C.SB.queryAll({ order: "date", dir: "desc", noCount: true }, C.SB.RAM_CAP || 6000,
             (n, total) => { if (on) setPosLoad({ loading: true, n, total }); });
           if (on && r && Array.isArray(r.rows)) { setPosState(cur => C.SB.mergeArrById(r.rows, Array.isArray(cur) ? cur : [])); try { localStorage.removeItem(C.LS.polist); } catch (e) {} }
         } catch (e) {}

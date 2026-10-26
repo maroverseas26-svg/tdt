@@ -779,17 +779,21 @@
         const j = await r.json(); return j && j[0] ? j[0].data : null;
       } catch (e) { return null; }
     },
+    // Keyset paging over id (pages ordered by id): the next page starts after the last id
+    // seen, so the server seeks straight to it instead of re-reading every skipped row the
+    // way OFFSET does (D1 bills rows read).
+    _afterId(id) { return id == null ? "" : "&id=gt." + encodeURIComponent(String(id)); },
     // Read every shard row (id = table+"~"+n), paginated, concatenating their arrays.
     // Also merges a legacy pre-shard single blob (id="_all") if one still exists, so a
     // not-yet-migrated database still loads. Returns null ONLY when nothing at all exists
     // (fresh DB) so the caller keeps its code seed; [] means "explicitly empty".
     async getShards(table) {
       const hdr = {};
-      const out = []; let found = false; let offset = 0;
+      const out = []; let found = false; let after = null;
       for (;;) {
         let j = null;
         try {
-          const r = await fetch(this.url + "/" + table + "?id=like." + table + "~*&select=data&order=id.asc&limit=" + this.PAGE + "&offset=" + offset, { headers: hdr });
+          const r = await fetch(this.url + "/" + table + "?id=like." + table + "~*&select=id,data&order=id.asc&limit=" + this.PAGE + this._afterId(after), { headers: hdr });
           if (!r.ok) break;
           j = await r.json();
         } catch (e) { break; }
@@ -797,7 +801,7 @@
         found = true;
         for (const row of j) if (Array.isArray(row.data)) for (const rec of row.data) out.push(rec);
         if (j.length < this.PAGE) break;
-        offset += this.PAGE;
+        after = j[j.length - 1].id;
       }
       try {
         const r = await fetch(this.url + "/" + table + "?id=eq._all&select=data", { headers: hdr });
@@ -840,17 +844,17 @@
     // legacy single "_all" blob if not yet migrated. Returns null ONLY when nothing exists.
     async getDeepShards(table) {
       const hdr = {};
-      const pre = table + "~"; const out = {}; let found = false; let offset = 0;
+      const pre = table + "~"; const out = {}; let found = false; let after = null;
       for (;;) {
         let j = null;
         try {
-          const r = await fetch(this.url + "/" + table + "?id=like." + table + "~*&select=id,data&order=id.asc&limit=" + this.PAGE + "&offset=" + offset, { headers: hdr });
+          const r = await fetch(this.url + "/" + table + "?id=like." + table + "~*&select=id,data&order=id.asc&limit=" + this.PAGE + this._afterId(after), { headers: hdr });
           if (!r.ok) break; j = await r.json();
         } catch (e) { break; }
         if (!Array.isArray(j) || !j.length) break;
         found = true;
         for (const row of j) { const k = String(row.id).slice(pre.length); if (k && row.data !== undefined) out[k] = row.data; }
-        if (j.length < this.PAGE) break; offset += this.PAGE;
+        if (j.length < this.PAGE) break; after = j[j.length - 1].id;
       }
       try {
         const r = await fetch(this.url + "/" + table + "?id=eq._all&select=data", { headers: hdr });
@@ -912,11 +916,11 @@
     // null ONLY when nothing exists (fresh DB) so the caller keeps its seed. onProgress(n) per page.
     async getRows(table, onProgress) {
       const hdr = {};
-      const byId = new Map(); let offset = 0; let found = false;
+      const byId = new Map(); let after = null; let found = false;
       for (;;) {
         let j = null;
         try {
-          const r = await fetch(this.url + "/" + table + "?select=id,data&order=id.asc&limit=" + this.PAGE + "&offset=" + offset, { headers: hdr });
+          const r = await fetch(this.url + "/" + table + "?select=id,data&order=id.asc&limit=" + this.PAGE + this._afterId(after), { headers: hdr });
           if (!r.ok) break;
           j = await r.json();
         } catch (e) { break; }
@@ -929,7 +933,7 @@
         }
         if (onProgress) try { onProgress(byId.size); } catch (e) {}
         if (j.length < this.PAGE) break;
-        offset += this.PAGE;
+        after = j[j.length - 1].id;
       }
       return found ? [...byId.values()] : null;
     },
@@ -972,30 +976,46 @@
     // Fetch ONE filtered, ordered, paginated page of PO records straight from the DB.
     // opts: { from,to (date YYYY-MM-DD), pic, customerIds:[], search, includeDeleted,
     //         order:'date'|'amount', dir:'asc'|'desc', limit, offset }
-    // Returns { rows:[record...], total } — total is the exact match count (from the
-    // Content-Range header) so the UI can paginate millions without holding them.
+    // Returns { rows:[record...], total, last } — total is the exact match count (from the
+    // Content-Range header) so the UI can paginate millions without holding them; pass
+    // count:false to skip it (a COUNT reads every matching index entry). `last` = {d, id}
+    // of the final row, the cursor for opts.keyset (see queryAll), which pages by (date, id)
+    // instead of OFFSET: { phase: "dated" } = all dated rows, { phase: "tie", d, id } = the
+    // rest of date d past id, { phase: "past", d } = dates past d, { phase: "null", id } =
+    // undated rows past id. Each is one index range, so no row is read and thrown away.
     async queryPage(opts) {
       const o = opts || {};
-      let qs = "?select=data" + this._objGuard();
-      if (o.from) qs += "&data->>date=gte." + encodeURIComponent(o.from);
-      if (o.to) qs += "&data->>date=lte." + encodeURIComponent(o.to);
+      let qs = "?select=data,kd:data->>date,id" + this._objGuard();
+      // A keyset cursor date already lies inside [from, to] and bounds the scan more tightly;
+      // sending the looser bound too makes SQLite seek on it and walk the skipped rows.
+      const kp = o.keyset && o.keyset.phase, asc = o.dir === "asc";
+      if (o.from && !(kp === "tie" || (kp === "past" && asc))) qs += "&data->>date=gte." + encodeURIComponent(o.from);
+      if (o.to && !(kp === "tie" || (kp === "past" && !asc))) qs += "&data->>date=lte." + encodeURIComponent(o.to);
       if (o.pic) qs += "&data->>pic=ilike." + encodeURIComponent(o.pic);
       const _qv = (x) => encodeURIComponent('"' + String(x).replace(/"/g, '') + '"');
       if (Array.isArray(o.customerIds) && o.customerIds.length) qs += "&data->>customerId=in.(" + o.customerIds.map(_qv).join(",") + ")";
       if (Array.isArray(o.pics) && o.pics.length) qs += "&data->>pic=in.(" + o.pics.map(_qv).join(",") + ")";
       if (o.search) { const s = encodeURIComponent("*" + String(o.search).trim() + "*"); qs += "&or=(data->>poNumber.ilike." + s + ",data->>invNo.ilike." + s + ")"; }
       if (!o.includeDeleted) qs += "&or=(data->>_deleted.is.null,data->>_deleted.eq.false)";
+      const desc = o.dir !== "asc", dir = desc ? "desc" : "asc";
+      const ks = o.keyset, past = desc ? "lt." : "gt.", enc = encodeURIComponent;
+      if (ks && ks.phase === "null") qs += "&data->>date=is.null" + (ks.id != null ? "&id=" + past + enc(ks.id) : "");
+      else if (ks && ks.phase === "tie") qs += "&data->>date=eq." + enc(ks.d) + "&id=" + past + enc(ks.id);
+      else if (ks) qs += "&data->>date=not.is.null" + (ks.phase === "past" ? "&data->>date=" + past + enc(ks.d) : "");
       const col = o.order === "amount" ? "data->>amountVnd" : "data->>date";
-      qs += "&order=" + col + "." + (o.dir === "asc" ? "asc" : "desc");
-      const limit = o.limit || 100, offset = o.offset || 0;
+      qs += "&order=" + col + "." + dir + ",id." + dir;
+      const limit = o.limit || 100, offset = ks ? 0 : (o.offset || 0);
       qs += "&limit=" + limit + "&offset=" + offset;
+      const headers = o.count === false ? {} : { Prefer: "count=exact", Range: offset + "-" + (offset + limit - 1), "Range-Unit": "items" };
       try {
-        const r = await fetch(this.url + "/pos" + qs, { headers: { Prefer: "count=exact", Range: offset + "-" + (offset + limit - 1), "Range-Unit": "items" } });
+        const r = await fetch(this.url + "/pos" + qs, { headers });
         if (!r.ok) { console.warn("[SB] queryPage HTTP " + r.status); return { rows: [], total: 0, error: r.status }; }
         const j = await r.json();
+        const arr = Array.isArray(j) ? j : [];
         const cr = r.headers.get("content-range") || "";
-        const total = cr.indexOf("/") >= 0 ? parseInt(cr.split("/")[1], 10) : (Array.isArray(j) ? j.length : 0);
-        return { rows: Array.isArray(j) ? j.map(x => x.data) : [], total: isNaN(total) ? 0 : total };
+        const total = o.count !== false && cr.indexOf("/") >= 0 ? parseInt(cr.split("/")[1], 10) : offset + arr.length;
+        const lastRow = arr[arr.length - 1];
+        return { rows: arr.map(x => x.data), total: isNaN(total) ? 0 : total, last: lastRow ? { d: lastRow.kd, id: lastRow.id } : null };
       } catch (e) { console.warn("[SB] queryPage failed", e); return { rows: [], total: 0, error: String(e) }; }
     },
     // Fetch ALL matching PO records for a filter (paginated internally). Guarded by a
@@ -1004,47 +1024,66 @@
     // company's history) — callers pass a tight filter (customerIds / date range).
     // onProgress(loaded, expected) fires after every page so the UI can show real progress
     // instead of an empty table while a large history streams in.
+    // Date order pages by (date, id) keyset — dated rows, then the undated ones (SQLite sorts
+    // NULL first ascending, last descending) — so each row is read once; the exact total is
+    // only counted when the cap cut the list short (opts.noCount skips even that).
     async queryAll(opts, cap, onProgress) {
+      const expected = cap || 0;   // progress denominator: the caller's cap, else unknown
       cap = cap || 20000;   // 0 / undefined → default cap
-      const page = 1000; let offset = 0; let rows = []; let total = 0;
-      for (;;) {
-        const r = await this.queryPage(Object.assign({}, opts, { limit: page, offset }));
-        total = r.total;
-        rows = rows.concat(r.rows);
-        if (onProgress) try { onProgress(rows.length, Math.min(total || 0, cap)); } catch (e) {}
-        if (!r.rows.length || rows.length >= total || rows.length >= cap) break;
-        offset += page;
+      const o = opts || {};
+      const page = 1000; let rows = []; let total = 0;
+      const progress = () => { if (onProgress) try { onProgress(rows.length, expected); } catch (e) {} };
+      if (o.order === "amount") {
+        for (let offset = 0; ;) {
+          const r = await this.queryPage(Object.assign({}, o, { limit: page, offset, count: offset === 0 }));
+          if (offset === 0) total = r.total;
+          rows = rows.concat(r.rows); progress();
+          if (!r.rows.length || rows.length >= total || rows.length >= cap) break;
+          offset += page;
+        }
+        return { rows, total, capped: total > rows.length };
       }
+      const phases = o.dir === "asc" ? ["null", "dated"] : ["dated", "null"];
+      let full = false;
+      for (const phase of phases) {
+        let ks = { phase };
+        for (;;) {
+          const limit = Math.min(page, cap - rows.length);
+          const r = await this.queryPage(Object.assign({}, o, { limit, count: false, keyset: ks }));
+          if (r.error) break;
+          rows = rows.concat(r.rows); progress();
+          if (rows.length >= cap) { full = true; break; }
+          if (r.rows.length < limit) {
+            if (ks.phase === "tie") { ks = { phase: "past", d: ks.d }; continue; }   // rest of that date done → older dates
+            break;
+          }
+          ks = phase === "null" ? { phase, id: r.last.id } : { phase: "tie", d: r.last.d, id: r.last.id };
+        }
+        if (full) break;
+      }
+      total = rows.length;
+      if (full && !o.noCount) { const c = await this.queryPage(Object.assign({}, o, { limit: 1, offset: 0 })); if (!c.error) total = Math.max(c.total, rows.length); }
       return { rows, total, capped: total > rows.length };
     },
     // Live PO count (server-side, excludes deleted). Falls back to null if RPC missing.
     async countLive() { const n = await this.rpc("po_count", {}); return (n == null ? null : Number(n)); },
     // Monthly totals for one year: [{mo,amount,sqm,cnt}]. For KPI cards / Overview.
     async aggYear(year) { const r = await this.rpc("po_month_totals", { p_year: String(year) }); return Array.isArray(r) ? r : []; },
-    // One paginated pass over an RPC. Returns null (NOT []) when the server refuses:
-    // callers must be able to tell "no rows" from "request failed", otherwise a Postgres
-    // statement timeout silently renders every PO KPI as 0 instead of falling back to RAM.
-    // A timeout (57014) on these table-scanning aggregates is usually transient — a cold
-    // cache or two of them racing — so each page is retried with a short backoff.
+    // One RPC call, whole result in one response (each call re-runs the aggregate, so it
+    // is not paged). Returns null (NOT []) when the server refuses: callers must be able to
+    // tell "no rows" from "request failed", otherwise a failure silently renders every PO KPI
+    // as 0 instead of falling back to RAM. Retried twice with a short backoff.
     async _rpcPages(fn, body, label) {
-      const page = 1000; let offset = 0; const out = [];
-      for (;;) {
-        let j = null, got = false;
-        for (let attempt = 0; attempt < 3 && !got; attempt++) {
-          if (attempt) await new Promise(r => setTimeout(r, 1200 * attempt));
-          try {
-            const r = await fetch(this.url + "/rpc/" + fn + "?limit=" + page + "&offset=" + offset, { method: "POST", headers: this.headers(), body });
-            if (!r.ok) { console.warn("[SB] " + label + " HTTP " + r.status + (attempt < 2 ? " — retrying" : "")); continue; }
-            j = await r.json(); got = true;
-          } catch (e) { console.warn("[SB] " + label + " failed", e); }
-        }
-        if (!got || !Array.isArray(j)) return null;
-        if (!j.length) break;
-        for (const x of j) out.push(x);
-        if (j.length < page) break;
-        offset += page;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        if (attempt) await new Promise(r => setTimeout(r, 1200 * attempt));
+        try {
+          const r = await fetch(this.url + "/rpc/" + fn, { method: "POST", headers: this.headers(), body });
+          if (!r.ok) { console.warn("[SB] " + label + " HTTP " + r.status + (attempt < 2 ? " — retrying" : "")); continue; }
+          const j = await r.json();
+          return Array.isArray(j) ? j : null;
+        } catch (e) { console.warn("[SB] " + label + " failed", e); }
       }
-      return out;
+      return null;
     },
     // Heavy aggregates run ONE AT A TIME. Overview, PO List, Targets and Retention all ask
     // on mount; letting three full table scans race is what pushed them past the timeout.
@@ -1202,10 +1241,17 @@
       }
       return [...out];
     },
-    // Per-customer retention stats (po_customer_stats) — one row per customer, paginated.
-    // null when the server refuses, so Retention falls back to the RAM engine.
+    // Per-customer retention stats (po_customer_stats) — one row per customer. null when the
+    // server refuses, so Retention falls back to the RAM engine. Cached like aggRange until
+    // POs are written (the app asks again whenever the RAM PO count changes).
     async customerStats() {
-      return await this._serialize(() => this._rpcPages("po_customer_stats", "{}", "customerStats"));
+      this._aggCache = this._aggCache || {};
+      if (this._aggCache.STATS) return this._aggCache.STATS;
+      const p = this._serialize(() => this._rpcPages("po_customer_stats", "{}", "customerStats"));
+      this._aggCache.STATS = p;
+      const r = await p;
+      if (r === null && this._aggCache.STATS === p) delete this._aggCache.STATS;
+      return r;
     },
   };
   // Password-reset endpoints on the Worker: the app POSTs to `${RESET_FN_BASE}/request-reset`

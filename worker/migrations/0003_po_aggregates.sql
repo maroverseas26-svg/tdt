@@ -63,6 +63,11 @@ BEGIN
     ON CONFLICT (cust) DO UPDATE SET data = NULL;
 END;
 
+-- The app pages POs by (date, id) keyset (SB.queryAll); with id in the date index the
+-- order comes straight from the index (no temp sort that reads every row twice).
+DROP INDEX IF EXISTS pos_live_date;
+CREATE INDEX IF NOT EXISTS pos_live_date_id ON pos (deleted, d, id);
+
 -- Backfill: register every bucket and customer that has live POs, all dirty. The first RPC
 -- call computes them (or run the warm-up call in CUTOVER.md right after applying this).
 INSERT INTO po_agg_cache (dk)
