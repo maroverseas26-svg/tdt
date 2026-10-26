@@ -62,25 +62,33 @@ async function poMonthTotals(env, args) {
   return (await env.DB.prepare(sql).bind(String(args.p_year ?? "")).all()).results;
 }
 
+// Every CTE is MATERIALIZED: left inline, SQLite re-runs the window queries for each joined
+// row (172M rows read and 11 s per call on 14k POs); materialized it is a few scans.
 async function poCustomerStats(env) {
-  const sql = `WITH base AS (
+  const sql = `WITH base AS MATERIALIZED (
       SELECT cust AS cid, d, ${num("amountVnd")} AS amt, nullif(inv_no, '') AS inv, nullif(${jt("commercial")}, '') AS prod, pic
       FROM pos WHERE ${LIVE} AND cust IS NOT NULL
     ),
-    gaps AS (
-      SELECT cid, julianday(d) - julianday(lag(d) OVER (PARTITION BY cid ORDER BY d)) AS gap
-      FROM base WHERE d GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'
+    agg AS MATERIALIZED (
+      SELECT cid, count(*) AS po_count, count(DISTINCT inv) AS inv_count, min(d) AS first_date, max(d) AS last_date,
+        sum(amt) AS total_amt, count(DISTINCT prod) AS distinct_products
+      FROM base GROUP BY cid
     ),
-    gapavg AS (SELECT cid, avg(gap) AS avg_gap FROM gaps WHERE gap > 0 GROUP BY cid),
-    lastrow AS (
+    gapavg AS MATERIALIZED (
+      SELECT cid, avg(gap) AS avg_gap FROM (
+        SELECT cid, julianday(d) - julianday(lag(d) OVER (PARTITION BY cid ORDER BY d)) AS gap
+        FROM base WHERE d GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'
+      ) WHERE gap > 0 GROUP BY cid
+    ),
+    lastrow AS MATERIALIZED (
       SELECT cid, pic AS last_pic, prod AS last_product FROM (
         SELECT cid, pic, prod, row_number() OVER (PARTITION BY cid ORDER BY d DESC) AS rn FROM base WHERE d IS NOT NULL
       ) WHERE rn = 1
     )
-    SELECT b.cid AS customer_id, count(*) AS po_count, count(DISTINCT b.inv) AS inv_count, min(b.d) AS first_date, max(b.d) AS last_date,
-      sum(b.amt) AS total_amt, ga.avg_gap AS avg_gap_days, count(DISTINCT b.prod) AS distinct_products, lr.last_pic, lr.last_product
-    FROM base b LEFT JOIN gapavg ga ON ga.cid = b.cid LEFT JOIN lastrow lr ON lr.cid = b.cid
-    GROUP BY b.cid ORDER BY b.cid`;
+    SELECT a.cid AS customer_id, a.po_count, a.inv_count, a.first_date, a.last_date, a.total_amt,
+      ga.avg_gap AS avg_gap_days, a.distinct_products, lr.last_pic, lr.last_product
+    FROM agg a LEFT JOIN gapavg ga ON ga.cid = a.cid LEFT JOIN lastrow lr ON lr.cid = a.cid
+    ORDER BY a.cid`;
   return (await env.DB.prepare(sql).all()).results;
 }
 
