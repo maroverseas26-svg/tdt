@@ -47,3 +47,10 @@ npm run deploy       # copies ../index.html to dist/ and deploys
 
 The frontend is imported into the Worker as a Text module (not Workers static
 assets), so a deploy is a single script upload.
+
+## DNS front door
+
+`crm.todaytec.com.vn` is attached to the Pages project `tdt-crm` (https://tdt-crm.pages.dev),
+whose only file, `pages/_worker.js`, hands every request to this Worker through the `TDT`
+service binding — Pages accepts a CNAME from an outside DNS provider, Workers can't.
+Cutover steps: [CUTOVER.md](CUTOVER.md).
