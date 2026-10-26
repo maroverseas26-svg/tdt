@@ -4,7 +4,8 @@
 const QX = window.CRM;
 
 // ---- Per-country defaults (seller block, terms, core prices). Admins can save their own
-// version of any country to settings/quote_templates; that copy wins over these. ----
+// version of any country to settings/quote_templates; that copy wins over these, field by
+// field. The seller block here is only a suggestion for the first entry (see qxCompanyOf). ----
 const QX_DEFAULT_TEMPLATES = {
   Thailand: {
     company: ["Todaytec Thailand Co., Ltd.", "8/1 Soi Kheha Romklao 72 Yaek 3", "Ratpattana Sub-District, Saphansung District", "Bangkok 10240, TAX ID: 0135567019491"],
@@ -28,8 +29,8 @@ const QX_DEFAULT_TEMPLATES = {
       ["Monarch 1 inch core / แกน Monarch 1 นิ้ว", "110mm / 110 มม.", "35.97 THB"],
     ],
   },
-  // Seller details for these markets have not been supplied yet: an admin fills them in on
-  // the Send quotation screen and saves them as the country default.
+  // Seller details for these markets have not been supplied yet: the first salesperson to
+  // quote for the country enters them on the Send quotation screen.
   Vietnam: { company: ["", "", "", ""], currency: "VND", termsTitle: "Terms & Conditions / Điều khoản và điều kiện", terms: [], coreTitle: ["Grade / Loại lõi", "Description (Size) / Mô tả (Kích thước)", "Unit Price (VND/core) / Đơn giá (VND/lõi)"], core: [] },
   Indonesia: { company: ["", "", "", ""], currency: "IDR", termsTitle: "Terms & Conditions", terms: [], coreTitle: ["Grade", "Description (Size)", "Unit Price (IDR/core)"], core: [] },
 };
@@ -72,6 +73,35 @@ const qxBase = (code) => String(code || "").split(/[.\s·|/×x]/)[0].toUpperCase
 const qxDays = (from, to) => { const a = Date.parse(from), b = Date.parse(to); return a && b && b > a ? Math.round((b - a) / 86400000) : 30; };
 const qxFileSafe = (s) => String(s || "").normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/đ/g, "d").replace(/Đ/g, "D").replace(/[^A-Za-z0-9._-]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 60);
 const qxFmt = (v, d) => (+v || 0).toLocaleString("en-US", { minimumFractionDigits: d, maximumFractionDigits: d });
+// Seller block of a country: entered once (by whoever quotes there first), then fixed for every
+// quotation. A country counts as set up only when settings/quote_templates holds its company
+// name; the hardcoded defaults above never do. Returns the 4 saved lines, or null.
+function qxCompanyOf(saved, market) {
+  const c = saved && saved[market] && saved[market].company;
+  return Array.isArray(c) && String(c[0] || "").trim() ? [0, 1, 2, 3].map(i => String(c[i] || "")) : null;
+}
+// Saved templates over the defaults, per country and per field, so a country whose saved copy
+// holds only its company still gets the default terms and core table.
+function qxMergeTemplates(saved) {
+  const out = { ...saved };
+  Object.keys(QX_DEFAULT_TEMPLATES).forEach(m => { out[m] = { ...QX_DEFAULT_TEMPLATES[m], ...(saved[m] || {}) }; });
+  return out;
+}
+// settings/quote_templates is shared by every country and edited by several people, so each
+// save reads the current copy first and changes only its own part. Unlike SB.get/upsert these
+// fail loudly, so a failed read is never mistaken for "nothing saved yet".
+async function qxReadTemplates() {
+  const r = await fetch(QX.SB.url + "/settings?id=eq.quote_templates&select=data", { cache: "no-store" });
+  if (!r.ok) throw new Error("HTTP " + r.status);
+  const j = await r.json();
+  const v = j && j[0] ? j[0].data : null;
+  return v && typeof v === "object" && !Array.isArray(v) ? v : {};
+}
+async function qxWriteTemplates(value) {
+  const r = await fetch(QX.SB.url + "/settings", { method: "POST", headers: QX.SB.headers(), body: JSON.stringify({ id: "quote_templates", data: value, updated_at: new Date().toISOString() }) });
+  if (!r.ok) throw new Error("HTTP " + r.status);
+}
+
 function qxBlobToBase64(blob) {
   return new Promise((resolve, reject) => { const r = new FileReader(); r.onload = () => resolve(String(r.result).split(",")[1] || ""); r.onerror = reject; r.readAsDataURL(blob); });
 }
@@ -88,7 +118,8 @@ function qxLogoBlob() {
 }
 
 // Draft = everything the salesperson can adjust. Saved on the quotation (exportDraft) so the
-// next export starts from the last one.
+// next export starts from the last one. The seller block is not part of it: it always comes
+// from the country's saved company (an old draft's `company` is ignored).
 function qxInitDraft(q, cust, user, templates, market) {
   const saved = q.exportDraft || {};
   const tpl = templates[market] || QX_DEFAULT_TEMPLATES[market] || QX_DEFAULT_TEMPLATES.Vietnam;
@@ -111,7 +142,6 @@ function qxInitDraft(q, cust, user, templates, market) {
   });
   return {
     market,
-    company: saved.company || tpl.company.slice(),
     attend: saved.attend != null ? saved.attend : (cust && cust.pic) || "",
     custName: saved.custName != null ? saved.custName : (cust && cust.name) || "",
     taxId: saved.taxId != null ? saved.taxId : (cust && cust.bizId) || "",
@@ -360,8 +390,10 @@ function QuoteSendPage({ q, cust, onClose }) {
     ro.observe(el);
     return () => ro.disconnect();
   });
-  const [templates, setTemplates] = React.useState(null);
+  const [saved, setSaved] = React.useState(null); // settings/quote_templates as stored
   const [d, setD] = React.useState(null);
+  const [companyInput, setCompanyInput] = React.useState(["", "", "", ""]);
+  const [editingCompany, setEditingCompany] = React.useState(false);
   const [busy, setBusy] = React.useState("");
   const [msg, setMsg] = React.useState(null);
   const logoUrl = window.__resources && window.__resources.quoteLogo;
@@ -370,16 +402,22 @@ function QuoteSendPage({ q, cust, onClose }) {
 
   React.useEffect(() => {
     let on = true;
-    QX.SB.get("settings", "quote_templates").then(saved => {
+    qxReadTemplates().catch(e => { setMsg({ ok: false, text: t("qx_company_load_failed") + " (" + (e && e.message) + ")" }); return {}; }).then(s => {
       if (!on) return;
-      const merged = { ...QX_DEFAULT_TEMPLATES, ...(saved && typeof saved === "object" ? saved : {}) };
-      setTemplates(merged);
-      setD(qxInitDraft(q, cust, user, merged, (q.exportDraft && q.exportDraft.market) || marketOf()));
+      const market = (q.exportDraft && q.exportDraft.market) || marketOf();
+      setSaved(s);
+      setCompanyInput(qxCompanyOf(s, market) || QX_DEFAULT_TEMPLATES[market].company.slice());
+      setD(qxInitDraft(q, cust, user, qxMergeTemplates(s), market));
     });
     return () => { on = false; };
   }, [q.id]);
 
   if (!d) return <div className="page"><p className="empty">…</p></div>;
+  const templates = qxMergeTemplates(saved);
+  const companySaved = qxCompanyOf(saved, d.market);
+  const companyOpen = !companySaved || editingCompany; // inputs shown: first-time setup or admin edit
+  // Preview, Excel and PDF always carry the saved seller block once there is one.
+  const doc = { ...d, company: companySaved || companyInput };
   const rows = qxPriced(d);
   const set = (k, v) => setD(prev => ({ ...prev, [k]: v }));
   const setLine = (i, k, v) => setD(prev => ({ ...prev, lines: prev.lines.map((l, j) => (j === i ? { ...l, [k]: v } : l)) }));
@@ -388,7 +426,9 @@ function QuoteSendPage({ q, cust, onClose }) {
   const switchMarket = (m) => {
     const tpl = templates[m] || QX_DEFAULT_TEMPLATES[m];
     const quoteCcy = tpl.currency || d.quoteCcy;
-    setD(prev => ({ ...prev, market: m, company: tpl.company.slice(), quoteCcy,
+    setCompanyInput(qxCompanyOf(saved, m) || QX_DEFAULT_TEMPLATES[m].company.slice());
+    setEditingCompany(false);
+    setD(prev => ({ ...prev, market: m, quoteCcy,
       usdRate: tpl.usdRate || qxRound(qxRate("USD") / qxRate(quoteCcy), 4), baseRate: qxRound(qxRate(prev.baseCcy) / qxRate(quoteCcy), 6),
       termsTitle: tpl.termsTitle, terms: tpl.terms.slice(), coreTitle: tpl.coreTitle.slice(), core: tpl.core.map(r => r.slice()), includeCore: tpl.core.length > 0 }));
   };
@@ -398,19 +438,20 @@ function QuoteSendPage({ q, cust, onClose }) {
     next.baseRate = qxRound(qxRate(next.baseCcy) / qxRate(next.quoteCcy), 6);
     return next;
   });
-  const companyMissing = !d.company[0];
   const fileBase = `Quotation_${qxFileSafe(d.quoteNo)}_${qxFileSafe(cust && (cust.shortName || cust.name))}`;
 
   const build = async () => {
     const files = [];
-    if (d.format !== "pdf") files.push({ filename: fileBase + ".xlsx", blob: await qxBuildXlsx(d, rows) });
+    if (d.format !== "pdf") files.push({ filename: fileBase + ".xlsx", blob: await qxBuildXlsx(doc, rows) });
     if (d.format !== "xlsx") files.push({ filename: fileBase + ".pdf", blob: await qxBuildPdf(docRef.current) });
-    // Remember the adjustments on the quotation so the next export starts from them.
-    const { quoteNo, date, ...draft } = d;
+    // Remember the adjustments on the quotation so the next export starts from them (the
+    // seller block is not one of them, and replacing exportDraft drops an old draft's copy).
+    const { quoteNo, date, company, ...draft } = d;
     updateQuotation(q.id, { exportDraft: draft });
     return files;
   };
   const run = async (kind) => {
+    if (!companySaved) return;
     setBusy(kind); setMsg(null);
     try {
       const files = await build();
@@ -427,13 +468,47 @@ function QuoteSendPage({ q, cust, onClose }) {
     }
     setBusy("");
   };
-  const saveDefault = () => {
-    const tpl = { ...(templates[d.market] || {}), company: d.company, currency: d.quoteCcy, usdRate: +d.usdRate || undefined, termsTitle: d.termsTitle, terms: d.terms, coreTitle: d.coreTitle, core: d.core };
-    const next = { ...templates, [d.market]: tpl };
-    setTemplates(next);
-    QX.SB.upsert("settings", next, "quote_templates");
-    setMsg({ ok: true, text: t("qx_default_saved").replace("{c}", d.market) });
+  // First-time setup (anyone) or admin edit of the seller block: only [market].company changes.
+  // If someone else set the country up in the meantime, a non-admin gets theirs, locked.
+  const saveCompany = async () => {
+    const m = d.market, lines = companyInput.map(s => String(s || "").trim());
+    if (!lines[0]) { setMsg({ ok: false, text: t("qx_company_name_required") }); return; }
+    setBusy("company"); setMsg(null);
+    try {
+      const fresh = await qxReadTemplates();
+      if (qxCompanyOf(fresh, m) && !isBoss) {
+        setSaved(fresh); setEditingCompany(false);
+        setMsg({ ok: false, text: t("qx_company_taken").replace("{c}", m) });
+      } else {
+        const next = { ...fresh, [m]: { ...(fresh[m] || {}), company: lines } };
+        await qxWriteTemplates(next);
+        setSaved(next); setEditingCompany(false);
+        setMsg({ ok: true, text: t("qx_company_saved").replace("{c}", m) });
+      }
+    } catch (e) {
+      setMsg({ ok: false, text: t("qx_company_save_failed") + " (" + (e && e.message) + ")" });
+    }
+    setBusy("");
   };
+  const startEditCompany = () => { setCompanyInput(companySaved.slice()); setEditingCompany(true); };
+  const cancelEditCompany = () => { setCompanyInput(companySaved.slice()); setEditingCompany(false); };
+  // Admin: currency, terms and core table become the country default (the company is saved
+  // on its own, above). Merged into the current copy so other countries are kept.
+  const saveDefault = async () => {
+    const m = d.market;
+    setBusy("default"); setMsg(null);
+    try {
+      const fresh = await qxReadTemplates();
+      const next = { ...fresh, [m]: { ...(fresh[m] || {}), currency: d.quoteCcy, usdRate: +d.usdRate || undefined, termsTitle: d.termsTitle, terms: d.terms, coreTitle: d.coreTitle, core: d.core } };
+      await qxWriteTemplates(next);
+      setSaved(next);
+      setMsg({ ok: true, text: t("qx_default_saved").replace("{c}", m) });
+    } catch (e) {
+      setMsg({ ok: false, text: t("qx_failed") + " (" + (e && e.message) + ")" });
+    }
+    setBusy("");
+  };
+  const companyLabels = ["qx_company_name", "qx_company_addr1", "qx_company_addr2", "qx_company_city_tax"];
 
   return (
     <div className="page qx-page">
@@ -444,12 +519,12 @@ function QuoteSendPage({ q, cust, onClose }) {
           <select className="select" value={d.format} onChange={e => set("format", e.target.value)} aria-label={t("qx_format")}>
             <option value="both">Excel + PDF</option><option value="xlsx">Excel</option><option value="pdf">PDF</option>
           </select>
-          <button className="btn btn-ghost" disabled={!!busy} onClick={() => run("download")}><Icon d={ICONS.download || ICONS.upload} size={15} /> {busy === "download" ? "…" : t("qx_download")}</button>
-          <button className="btn btn-primary" disabled={!!busy || !(user && user.email)} onClick={() => run("email")}>{busy === "email" ? "…" : t("qx_email_me").replace("{email}", (user && user.email) || "")}</button>
+          <button className="btn btn-ghost" disabled={!!busy || !companySaved} title={companySaved ? undefined : t("qx_company_required").replace("{c}", d.market)} onClick={() => run("download")}><Icon d={ICONS.download || ICONS.upload} size={15} /> {busy === "download" ? "…" : t("qx_download")}</button>
+          <button className="btn btn-primary" disabled={!!busy || !companySaved || !(user && user.email)} title={companySaved ? undefined : t("qx_company_required").replace("{c}", d.market)} onClick={() => run("email")}>{busy === "email" ? "…" : t("qx_email_me").replace("{email}", (user && user.email) || "")}</button>
         </div>
       </header>
       {msg && <p className={msg.ok ? "login-sent" : "login-err"} style={{ marginBottom: 12 }}>{msg.text}</p>}
-      {companyMissing && <p className="login-err" style={{ marginBottom: 12 }}>{t("qx_company_missing").replace("{c}", d.market)}</p>}
+      {!companySaved && <p className="login-err" style={{ marginBottom: 12 }}>{t("qx_company_required").replace("{c}", d.market)}</p>}
 
       <div className="qx-grid">
         <section className="card qx-form">
@@ -458,11 +533,23 @@ function QuoteSendPage({ q, cust, onClose }) {
             <Field label={t("country")}>
               <select className="select" value={d.market} onChange={e => switchMarket(e.target.value)}>{markets.map(m => <option key={m} value={m}>{m}</option>)}</select>
             </Field>
-            {d.company.map((line, i) => (
-              <Field key={i} label={t(i === 0 ? "qx_company_name" : "qx_company_line") + (i ? " " + i : "")}>
-                <input className="input" value={line} onChange={e => setList("company", i, e.target.value)} />
-              </Field>
-            ))}
+          </div>
+          <div className="qx-company" style={{ border: "1px solid var(--line)", borderRadius: 8, padding: 12, margin: "8px 0 16px" }}>
+            <strong>{t(!companySaved ? "qx_company_setup" : editingCompany ? "qx_company_editing" : "qx_company_fixed").replace("{c}", d.market)}</strong>
+            <p style={{ margin: "4px 0 8px", fontSize: 13, color: "var(--muted)" }}>{t(!companySaved ? "qx_company_setup_hint" : "qx_company_fixed_hint").replace("{c}", d.market)}</p>
+            <div className="form-grid">
+              {(companyOpen ? companyInput : companySaved).map((line, i) => (
+                <Field key={i} label={t(companyLabels[i])} required={companyOpen && i === 0}>
+                  <input className="input" value={line} readOnly={!companyOpen} disabled={!companyOpen}
+                    onChange={e => { const v = e.target.value; setCompanyInput(prev => prev.map((x, j) => (j === i ? v : x))); }} />
+                </Field>
+              ))}
+            </div>
+            <div className="modal-actions" style={{ marginTop: 8 }}>
+              {companyOpen && <button className="btn btn-primary" disabled={!!busy} onClick={saveCompany}>{busy === "company" ? "…" : t("qx_company_save")}</button>}
+              {editingCompany && <button className="btn btn-ghost" disabled={!!busy} onClick={cancelEditCompany}>{t("cancel")}</button>}
+              {companySaved && !editingCompany && isBoss && <button className="btn btn-ghost" onClick={startEditCompany}>{t("qx_company_edit")}</button>}
+            </div>
           </div>
 
           <h2>{t("qx_customer")}</h2>
@@ -539,14 +626,14 @@ function QuoteSendPage({ q, cust, onClose }) {
 
           {isBoss && (
             <div className="modal-actions">
-              <button className="btn btn-ghost" onClick={saveDefault}>{t("qx_save_default").replace("{c}", d.market)}</button>
+              <button className="btn btn-ghost" disabled={!!busy} onClick={saveDefault}>{t("qx_save_default").replace("{c}", d.market)}</button>
             </div>
           )}
         </section>
 
         <section className="card qx-preview">
           <h2>{t("qx_preview")}</h2>
-          <div className="qx-preview-scroll" ref={previewRef}><div style={{ zoom, padding: 8 }}><QuoteDoc d={d} rows={rows} logoUrl={logoUrl} docRef={docRef} /></div></div>
+          <div className="qx-preview-scroll" ref={previewRef}><div style={{ zoom, padding: 8 }}><QuoteDoc d={doc} rows={rows} logoUrl={logoUrl} docRef={docRef} /></div></div>
         </section>
       </div>
     </div>
