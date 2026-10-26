@@ -31,6 +31,12 @@ iterations, random salt, stored as `pbkdf2-sha256$iter$salt$hash`.
 Supabase Edge Function secrets). Optional: `APP_NAME`, `APP_URL` (reset links
 otherwise use the request origin). Set with `npx wrangler secret put <NAME>`.
 
+## Accounts
+
+`scripts/sync-users-from-supabase.cjs` copies the accounts from Supabase
+`users(_all)` into D1 with hashed passwords (21 accounts loaded on 2026-10-26).
+Re-run it right before the DNS cutover; after cutover D1 is the only source.
+
 ## Deploy
 
 ```sh
