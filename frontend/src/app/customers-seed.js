@@ -1,0 +1,1 @@
+window.CRM_CUSTOMERS = [];
