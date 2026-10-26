@@ -492,13 +492,15 @@ function QuotationDetailPage({ id, onBack, openCustomer, openProject, openPOFrom
   const q = quotations.find(x => x.id === id);
   // All hooks first — an early return above them changes the hook count and crashes React.
   const [fullEdit, setFullEdit] = useState(false);
+  const [sending, setSending] = useState(false);
   const [linkProj, setLinkProj] = useState((q && q.projectId) || "");
   if (!q) return (<div className="page"><button className="back-btn" onClick={onBack}><Icon d={ICONS.back} size={16} /> {t("qt_detail_back")}</button></div>);
   if (fullEdit) return <QuotationFormModal existing={q} asPage onClose={() => setFullEdit(false)} />;
   const cust = customers.find(c => c.id === q.customerId);
+  if (sending) return <QuoteSendPage q={q} cust={cust} onClose={() => setSending(false)} />;
   const proj = projects.find(p => p.id === q.projectId);
 
-  const total = quoteTotal(q);
+  const total = quoteTotalVnd(q);
   const setStatus = (status) => updateQuotation(q.id, { status });
 
   const saveLink = () => {
@@ -520,6 +522,7 @@ function QuotationDetailPage({ id, onBack, openCustomer, openProject, openPOFrom
               </select>
               {cust && <button className="link-btn" onClick={() => openCustomer(q.customerId)}>{cust.shortName || cust.name} →</button>}
               {proj && openProject && <button className="link-btn" onClick={() => openProject(q.projectId)}>{proj.name} →</button>}
+              <button className="btn btn-primary btn-sm" onClick={() => setSending(true)}>{t("qx_send")}</button>
             </div>
           </div>
         </div>

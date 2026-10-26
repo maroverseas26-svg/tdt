@@ -21,6 +21,9 @@ frontend bundle or in Supabase.
 | PUT | `/api/users/:id` | admin, or self | admin may pass `password` to set it; self edits keep role/scope fields |
 | POST | `/api/users/:id/password` | admin | `{password}` |
 | DELETE | `/api/users/:id` | admin | soft delete (`_deleted: true`) |
+| GET/POST/DELETE | `/rest/v1/<table>`, POST `/rest/v1/rpc/<fn>` | session | CRM data (PostgREST-compatible subset over D1, see `src/rest.js`, `src/rpc.js`) |
+| GET | `/api/files/<sha256>` | session | PO attachments moved out of records |
+| POST | `/api/quotes/send` | session | `{quoteNo, customer, files:[{filename, content(base64)}]}` → emails the .xlsx/.pdf to the signed-in user |
 
 Admin = role `BOD` or `modules` contains `admin`. Passwords: PBKDF2-SHA256, 100k
 iterations, random salt, stored as `pbkdf2-sha256$iter$salt$hash`.

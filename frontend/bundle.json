@@ -13,6 +13,12 @@
       "compressed": false
     },
     {
+      "uuid": "13242217-ca43-5b4a-a6fb-3d1d32a74ec1",
+      "file": "assets/quote-logo.png",
+      "mime": "image/png",
+      "compressed": false
+    },
+    {
       "uuid": "488dd8f5-76b9-492d-a92b-bb3951036892",
       "file": "vendor/react.development.js",
       "mime": "text/javascript",
@@ -123,6 +129,12 @@
     {
       "uuid": "3863222f-9228-4886-bcc4-1f919411b97a",
       "file": "app/quotations.jsx",
+      "mime": "application/javascript",
+      "compressed": true
+    },
+    {
+      "uuid": "14034e82-d49d-55c3-89ac-7411a65c76f3",
+      "file": "app/quote-export.jsx",
       "mime": "application/javascript",
       "compressed": true
     },
@@ -303,6 +315,10 @@
     {
       "id": "logoFull",
       "uuid": "447216c6-4b99-4a15-bf58-aecaa5774923"
+    },
+    {
+      "id": "quoteLogo",
+      "uuid": "13242217-ca43-5b4a-a6fb-3d1d32a74ec1"
     }
   ],
   "page_order": []

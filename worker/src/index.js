@@ -1,6 +1,7 @@
 // Todaytec CRM — Cloudflare Worker "tdt"
 // Serves the CRM frontend (the bundled index.html), the auth API (/api/auth, /api/users),
-// the CRM data API (/rest/v1, PostgREST-compatible, over D1) and attachments (/api/files).
+// the CRM data API (/rest/v1, PostgREST-compatible, over D1), attachments (/api/files) and
+// quote emails (/api/quotes/send).
 // Every data route needs a session cookie; SMTP credentials are Worker secrets.
 import INDEX_HTML from "../dist/index.html";
 import { json, headerMatchesSecret } from "./util.js";
@@ -8,6 +9,7 @@ import { currentUser, publicAuthRoute, accountRoute } from "./auth.js";
 import { restRoute } from "./rest.js";
 import { rpcRoute } from "./rpc.js";
 import { serveFile } from "./files.js";
+import { sendQuote } from "./quotes.js";
 
 // Data sync/verification scripts (worker/scripts) authenticate with the MIGRATION_TOKEN
 // secret instead of a session; removing the secret disables this path.
@@ -32,6 +34,7 @@ async function route(req, env, url, ctx) {
   if (path.startsWith("/rest/v1/")) return restRoute(req, env, url, me);
   const file = path.match(/^\/api\/files\/([0-9a-f]{64})$/);
   if (file && req.method === "GET") return serveFile(env, file[1], url);
+  if (path === "/api/quotes/send" && req.method === "POST" && !me.system) return sendQuote(req, env, me);
 
   return (await accountRoute(req, env, url, me)) || json({ ok: false, error: "not_found" }, 404);
 }

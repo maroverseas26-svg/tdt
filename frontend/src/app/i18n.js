@@ -1,6 +1,7 @@
 // Todaytec CRM — UI strings (EN default, VI, TH)
 window.I18N = {
   en: {
+    qx_send: "Send quotation", qx_title: "Send quotation", qx_back: "Back to quotation", qx_format: "File format", qx_download: "Download", qx_email_me: "Email to {email}", qx_downloaded: "Downloaded.", qx_sent: "Sent to {email}. Check your inbox and forward it to the customer.", qx_failed: "Could not create or send the quotation", qx_default_saved: "Saved as the default for {c}.", qx_company_missing: "Company details for {c} are not set yet. Fill in the seller block below (admins: Save as default).", qx_seller: "Seller (company)", qx_company_name: "Company name", qx_company_line: "Line", qx_customer: "Customer & terms", qx_currency: "Currency", qx_base_ccy: "Price currency (as stored)", qx_quote_ccy: "Quote currency", qx_lines: "Products", qx_unit_price: "Unit price", qx_note: "Note for this product (shown in the Note column)", qx_terms: "Terms & conditions", qx_terms_title: "Title", qx_add_term: "Add a term", qx_core: "Include core price table", qx_add_core: "Add a core row", qx_save_default: "Save as default for {c}", qx_preview: "Preview",
     appName: "Todaytec CRM",
     tagline: "Barcoding The World",
     // nav
@@ -421,6 +422,7 @@ window.I18N = {
     ovp_mat_partial: "Product totals are computed from the POs loaded in this browser. Run the po_agg_material migration for full-history figures.",
   },
   vi: {
+    qx_send: "Gửi báo giá", qx_title: "Gửi báo giá", qx_back: "Quay lại báo giá", qx_format: "Định dạng file", qx_download: "Tải về", qx_email_me: "Gửi email tới {email}", qx_downloaded: "Đã tải về.", qx_sent: "Đã gửi tới {email}. Kiểm tra hộp thư và chuyển tiếp cho khách.", qx_failed: "Không tạo / gửi được báo giá", qx_default_saved: "Đã lưu làm mặc định cho {c}.", qx_company_missing: "Chưa có thông tin công ty cho {c}. Nhập phần Người bán bên dưới (admin: Lưu làm mặc định).", qx_seller: "Người bán (công ty)", qx_company_name: "Tên công ty", qx_company_line: "Dòng", qx_customer: "Khách hàng & điều khoản", qx_currency: "Tiền tệ", qx_base_ccy: "Tiền gốc của giá (đang lưu)", qx_quote_ccy: "Tiền báo giá", qx_lines: "Sản phẩm", qx_unit_price: "Đơn giá", qx_note: "Ghi chú cho sản phẩm (cột Note)", qx_terms: "Điều khoản & điều kiện", qx_terms_title: "Tiêu đề", qx_add_term: "Thêm điều khoản", qx_core: "Kèm bảng giá lõi", qx_add_core: "Thêm dòng lõi", qx_save_default: "Lưu làm mặc định cho {c}", qx_preview: "Xem trước",
     appName: "Todaytec CRM", tagline: "Barcoding The World",
     nav_overview: "Tổng quan", nav_customers: "Khách hàng", nav_pipelines: "Pipeline",
     nav_projects: "Dự án", nav_admin: "Phân quyền",
@@ -831,6 +833,7 @@ window.I18N = {
     ovp_mat_partial: "Số liệu theo sản phẩm đang tính từ các PO đã tải trong trình duyệt. Chạy migration po_agg_material để lấy đủ lịch sử.",
   },
   th: {
+    qx_send: "ส่งใบเสนอราคา", qx_title: "ส่งใบเสนอราคา", qx_back: "กลับไปที่ใบเสนอราคา", qx_format: "รูปแบบไฟล์", qx_download: "ดาวน์โหลด", qx_email_me: "ส่งอีเมลถึง {email}", qx_downloaded: "ดาวน์โหลดแล้ว", qx_sent: "ส่งถึง {email} แล้ว ตรวจสอบกล่องจดหมายและส่งต่อให้ลูกค้า", qx_failed: "สร้างหรือส่งใบเสนอราคาไม่สำเร็จ", qx_default_saved: "บันทึกเป็นค่าเริ่มต้นของ {c} แล้ว", qx_company_missing: "ยังไม่มีข้อมูลบริษัทสำหรับ {c} กรอกส่วนผู้ขายด้านล่าง (แอดมิน: บันทึกเป็นค่าเริ่มต้น)", qx_seller: "ผู้ขาย (บริษัท)", qx_company_name: "ชื่อบริษัท", qx_company_line: "บรรทัด", qx_customer: "ลูกค้าและเงื่อนไข", qx_currency: "สกุลเงิน", qx_base_ccy: "สกุลเงินของราคา (ที่บันทึกไว้)", qx_quote_ccy: "สกุลเงินในใบเสนอราคา", qx_lines: "สินค้า", qx_unit_price: "ราคาต่อหน่วย", qx_note: "หมายเหตุสินค้า (คอลัมน์ Note)", qx_terms: "ข้อกำหนดและเงื่อนไข", qx_terms_title: "หัวข้อ", qx_add_term: "เพิ่มข้อกำหนด", qx_core: "แนบตารางราคาแกน", qx_add_core: "เพิ่มแถวแกน", qx_save_default: "บันทึกเป็นค่าเริ่มต้นของ {c}", qx_preview: "ตัวอย่าง",
     appName: "Todaytec CRM", tagline: "Barcoding The World",
     nav_overview: "ภาพรวม", nav_customers: "ลูกค้า", nav_pipelines: "ไปป์ไลน์",
     nav_projects: "โปรเจกต์", nav_admin: "สิทธิ์การใช้งาน",
