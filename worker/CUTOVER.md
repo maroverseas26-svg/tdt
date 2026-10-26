@@ -8,6 +8,23 @@ State before cutover:
   it activates by itself once DNS points at Pages.
 - Old app keeps running on Netlify + Supabase until the DNS change.
 
+## 0. Before cutover: free-plan aggregates (once)
+
+Migration `0003_po_aggregates.sql` adds the PO aggregate caches (see `src/rpc.js`) and
+swaps the PO date index for `(deleted, d, id)`. Apply it, deploy, then build the caches
+one month per request:
+
+```sh
+cd worker
+npm run db:migrate                     # applies 0003 (~55k rows read, ~15k rows written)
+npm run deploy
+MIGRATION_TOKEN=... node scripts/warm-aggregates.mjs   # ~290k rows read, ~350 written, once
+```
+
+Run this on a day with read budget left (the D1 free plan resets at 00:00 UTC). A full
+re-import of all POs costs ~127k rows written (row + indexes + triggers), more than a day's
+100k — keep data syncs incremental (step 2).
+
 ## 1. Freeze (about 15 minutes)
 
 Ask the team to stop entering data in the old app.
@@ -18,12 +35,16 @@ Ask the team to stop entering data in the old app.
 cd worker
 export CLOUDFLARE_API_TOKEN=...      # or the session proxy
 export MIGRATION_TOKEN=...           # the Worker secret of the same name
-NODE_USE_ENV_PROXY=1 node scripts/sync-data-from-supabase.mjs   # all CRM tables, re-runnable
-node scripts/sync-users-from-supabase.cjs                       # accounts + current passwords (hashed)
+NODE_USE_ENV_PROXY=1 node scripts/sync-data-from-supabase.mjs --dry-run   # what would change
+NODE_USE_ENV_PROXY=1 node scripts/sync-data-from-supabase.mjs             # all CRM tables, re-runnable
+node scripts/sync-users-from-supabase.cjs                                 # accounts + current passwords (hashed)
 ```
 
-The data sync upserts every row and removes rows that no longer exist in Supabase, so
-anything typed into the new app before cutover (tests) is replaced by Supabase's data.
+The data sync is incremental: it compares `(id, updated_at)` on both sides, writes only
+new/changed rows and removes rows that no longer exist in Supabase, so anything typed into
+the new app before cutover (tests) is replaced by Supabase's data. It prints the D1 rows
+read/written it caused (~15k read and ~7 written per changed PO; `--full` rewrites
+everything and does not fit the free plan's daily writes).
 
 ## 3. DNS
 

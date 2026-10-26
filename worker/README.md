@@ -25,6 +25,9 @@ frontend bundle or in Supabase.
 | GET | `/api/files/<sha256>` | session | PO attachments moved out of records |
 | POST | `/api/quotes/send` | session | `{quoteNo, customer, files:[{filename, content(base64)}]}` → emails the .xlsx/.pdf to the signed-in user |
 
+Every `/api` and `/rest/v1` response carries `x-d1-rows-read` / `x-d1-rows-written`: the
+D1 rows that request read/wrote (src/meter.js) — the free plan allows 5M / 100k per day.
+
 Admin = role `BOD` or `modules` contains `admin`. Passwords: PBKDF2-SHA256, 100k
 iterations, random salt, stored as `pbkdf2-sha256$iter$salt$hash`.
 
@@ -39,6 +42,21 @@ otherwise use the request origin). Set with `npx wrangler secret put <NAME>`.
 `scripts/sync-users-from-supabase.cjs` copies the accounts from Supabase
 `users(_all)` into D1 with hashed passwords (21 accounts loaded on 2026-10-26).
 Re-run it right before the DNS cutover; after cutover D1 is the only source.
+
+## D1 budget (free plan)
+
+The PO RPCs read aggregate caches kept by triggers on `pos` (migration 0003, `src/rpc.js`)
+instead of scanning it, and the app pages POs by `(date, id)` keyset. One session (login,
+Overview, Customers, Projects, Quotations, PO List, Retention, Targets, reload, logout)
+reads ~20k rows; a PO edit writes ~8.
+
+| Script | What |
+|---|---|
+| `scripts/measure-session.mjs` | plays that session in headless Chromium, sums the headers |
+| `scripts/test-rpc-parity.mjs` | every RPC vs the old full-scan SQL (`scripts/parity/`), also after writes |
+| `scripts/test-po-paging.mjs` | the app's keyset paging vs one unpaged query |
+| `scripts/warm-aggregates.mjs` | builds the caches after migration 0003, one month per request |
+| `scripts/sync-data-from-supabase.mjs` | incremental Supabase → D1 copy (`--full`, `--dry-run`) |
 
 ## Deploy
 
