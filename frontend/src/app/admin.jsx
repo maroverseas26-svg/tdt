@@ -498,8 +498,8 @@ function AdminPage() {
                         <button className="acct-row-id" onClick={() => setSelUserId(u.id)}>
                           <Avatar name={u.name} size={34} src={u.photo} color={role.scope === "all" ? "var(--navy)" : undefined} />
                           <div className="acct-member-id">
-                            <strong>{u.name}{u.id === user.id ? " · you" : ""}</strong>
-                            <small>{u.email || "—"}{u.salesCode ? " · " + u.salesCode : ""}</small>
+                            <strong title={u.name}>{u.name}{u.id === user.id ? " · you" : ""}</strong>
+                            <small title={u.email || ""}>{u.email || "—"}{u.salesCode ? " · " + u.salesCode : ""}</small>
                           </div>
                         </button>
                         <label className="acct-row-ctl">
@@ -509,7 +509,7 @@ function AdminPage() {
                             {roles.map(x => <option key={x.id} value={x.id}>{x.name}</option>)}
                           </select>
                         </label>
-                        <div className="acct-row-ctl"><span>{t("ad_countries")}</span><em>{countriesText(u)}</em></div>
+                        <div className="acct-row-ctl"><span>{t("ad_countries")}</span><em title={countriesText(u)}>{countriesText(u)}</em></div>
                         <div className="acct-row-ctl"><span>{t("ad_kpi_country")}</span><em>{kpiC || "—"}</em></div>
                         <div className="acct-row-ctl acct-row-active">
                           <span>{t("ad_active")}</span>
