@@ -409,8 +409,6 @@ window.I18N = {
     pd_import_upserted: "updated", pd_import_added: "added", pd_import_newadded: "new products added.", pd_variants: "variants",
 
     // ---- Target currency notice ----
-    tg_currency_notice_title: "Multi-currency targets (coming soon)",
-    tg_currency_notice_body: "The data schema already reserves a target_currency field per target row, so targets can be entered and tracked in VND, THB, or USD without re-keying historic data. Display/edit UI for this is not wired up yet.",
 
     // ---- Sales Forecast price referral ----
     fc_price_referral_title: "Price referral", fc_price_referral_body: "Suggested unit price is calculated from this customer's PO history for the same product (most recent matching POs, average VND/sqm or VND/roll).",
@@ -842,8 +840,6 @@ window.I18N = {
     pd_import_upserted: "đã cập nhật", pd_import_added: "đã thêm mới", pd_import_newadded: "sản phẩm mới được thêm.", pd_variants: "biến thể",
 
     // ---- Target currency notice ----
-    tg_currency_notice_title: "Chỉ tiêu đa tiền tệ (sắp ra mắt)",
-    tg_currency_notice_body: "Schema dữ liệu đã chuẩn bị sẵn trường target_currency cho từng dòng chỉ tiêu, cho phép nhập và theo dõi chỉ tiêu bằng VND, THB hoặc USD mà không cần nhập lại dữ liệu lịch sử. Giao diện hiển thị/chỉnh sửa cho tính năng này chưa được kết nối.",
 
     // ---- Sales Forecast price referral ----
     fc_price_referral_title: "Gợi ý giá bán", fc_price_referral_body: "Giá đề xuất được tính từ lịch sử PO của khách hàng này với cùng sản phẩm (các PO khớp gần nhất, trung bình VND/m² hoặc VND/cuộn).",
@@ -1274,8 +1270,6 @@ window.I18N = {
     pd_import_upserted: "อัปเดตแล้ว", pd_import_added: "เพิ่มแล้ว", pd_import_newadded: "สินค้าใหม่ที่เพิ่ม", pd_variants: "รูปแบบ",
 
     // ---- Target currency notice ----
-    tg_currency_notice_title: "เป้าหมายหลายสกุลเงิน (เร็วๆนี้)",
-    tg_currency_notice_body: "โครงสร้างข้อมูลได้เตรียมฟิลด์ target_currency ไว้ในแต่ละแถวเป้าหมายแล้ว ทำให้สามารถบันทึกและติดตามเป้าหมายเป็น VND, THB หรือ USD ได้โดยไม่ต้องคีย์ข้อมูลย้อนหลังใหม่ ส่วนหน้าจอแสดง/แก้ไขยังไม่ได้เชื่อมต่อใช้งาน",
 
     // ---- Sales Forecast price referral ----
     fc_price_referral_title: "คำแนะนำราคา", fc_price_referral_body: "ราคาที่แนะนำคำนวณจากประวัติ PO ของลูกค้ารายนี้สำหรับสินค้าเดียวกัน (PO ที่ตรงกันล่าสุด เฉลี่ยเป็น VND/ตร.ม. หรือ VND/ม้วน)",

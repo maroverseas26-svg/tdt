@@ -31,7 +31,7 @@ function TcCell({ val, canEdit, onCommit, decimals }) {
 }
 
 /* ---- the grid ---- */
-function TgByCustomer({ t, year, canEdit, canDel, reps, custById, picFilter, importing, setImporting }) {
+function TgByCustomer({ t, year, canEdit, canDel, reps, limitToReps, scopeIds, custById, picFilter, importing, setImporting }) {
   const canDelRows = canDel !== undefined ? canDel : canEdit;
   const { targetCust, setTargetCustMonth, setTargetCustField, deleteTargetCustRows, normalizeTargetCustPics, currency } = useApp();
   const [q, setQ] = React.useState("");
@@ -65,7 +65,11 @@ function TgByCustomer({ t, year, canEdit, canDel, reps, custById, picFilter, imp
       const items = Object.keys(yearData[cid] || {}).map(code => ({ code, ...(yearData[cid][code] || {}) }));
       // Only the EXPLICIT PIC filter narrows the grid. A row whose PIC does not resolve to a
       // registered rep is still a real target, so it is shown rather than silently dropped.
-      const kept = items.filter(it => !picFilter || String(it.pic || "").toUpperCase() === picFilter.toUpperCase());
+      // Below BOD only the rows of the reps on screen show (own row for a sales account, the
+      // country for a manager); a row without a PIC shows when the customer is in scope.
+      const repSet = new Set((reps || []).map(r => String(r).toUpperCase()));
+      const mine = (it) => !limitToReps || (it.pic ? repSet.has(String(it.pic).toUpperCase()) : !!(scopeIds && scopeIds.has(cid)));
+      const kept = items.filter(it => mine(it) && (!picFilter || String(it.pic || "").toUpperCase() === picFilter.toUpperCase()));
       if (!kept.length) return;
       if (qq && !(String(label) + " " + (c.name || "") + " " + kept.map(x => x.code).join(" ")).toLowerCase().includes(qq)) return;
       const sqm = Array(12).fill(0);
@@ -80,7 +84,7 @@ function TgByCustomer({ t, year, canEdit, canDel, reps, custById, picFilter, imp
       out.push({ cid, label, full: c.name || "", items: kept.sort((a, b) => a.code.localeCompare(b.code)), sqm, mon, val, totalSqm: tcSum(sqm) });
     });
     return out.sort((a, b) => b.totalSqm - a.totalSqm || a.label.localeCompare(b.label));
-  }, [yearData, custById, q, picFilter]);
+  }, [yearData, custById, q, picFilter, reps, limitToReps, scopeIds]);
 
   const tot = React.useMemo(() => {
     const sqm = Array(12).fill(0), mon = Array(12).fill(0); let val = 0;
