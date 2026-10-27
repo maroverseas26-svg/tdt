@@ -664,7 +664,9 @@ function AppProvider({ children, tweaks }) {
   // Global DATE RANGE filter (topbar) — the same idea as the country filter: ONE Looker-style
   // control drives every tab, with an optional comparison window.
   // Shape: {preset, from, to, cmp, cmpFrom, cmpTo}; resolved dates live in dateRangeR.
-  const [dateRange, setDateRangeState] = useState(() => C.loadJSON("ttcrm_date_range_v1", { preset: "ytd", from: "", to: "", cmp: "none", cmpFrom: "", cmpTo: "" }));
+  // Every app open starts on "This month"; the user's pick holds until the next open
+  // (the comparison setting is remembered).
+  const [dateRange, setDateRangeState] = useState(() => ({ cmp: "none", cmpFrom: "", cmpTo: "", ...C.loadJSON("ttcrm_date_range_v1", {}), preset: "thisMonth", from: "", to: "" }));
   const setDateRange = (r) => { setDateRangeState(r); C.saveJSON("ttcrm_date_range_v1", r); };
   const dateRangeR = useMemo(() => (window.drResolve ? window.drResolve(dateRange) : { from: "", to: "", cmp: "none", cmpFrom: "", cmpTo: "", hasCmp: false }), [dateRange]);
   // default currency from the logged-in user's assigned market (still manually changeable)
