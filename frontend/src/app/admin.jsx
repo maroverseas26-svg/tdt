@@ -403,6 +403,15 @@ function AdminPage() {
           {saveBadge}
           {rolesBadge}
         </div>
+        <div className="perm-legend" aria-label={t("ad_legend_title")}>
+          {AD_LEVELS.map(l => (
+            <div key={l} className="perm-legend-row">
+              <span className={"perm-legend-chip perm-lv-" + l}>{lvLabel(l)}</span>
+              <span>{t("ad_legend_" + l)}</span>
+            </div>
+          ))}
+          <small className="perm-legend-note">{t("ad_legend_note")}</small>
+        </div>
         {roleMsg && <div className="perm-msg" role="alert">{roleMsg}<button className="role-x" onClick={() => setRoleMsg("")}>✕</button></div>}
         <div className="perm-scroll">
           <table className="perm-matrix">
