@@ -32,6 +32,11 @@ title line: each section heading is added when the manual is assembled. Screensh
 | `img/products.png` | 10 Products | Products list: search box and a product opened to its variant |
 | `img/permissions-matrix.png` | 11 Access & FAQ | Permissions matrix (admin view): **View / Edit / Admin** per role and module |
 
+## Branded HTML / PDF
+
+`branded/` holds the Todaytec-branded manual built from these files. Rebuild it after any change:
+`NODE_PATH=$(npm root -g) node docs/user-manual/branded/build-branded.mjs` (see `branded/README.md`).
+
 ## Refreshing the screenshots
 
 Local only — never against the deployed Worker or its D1.
