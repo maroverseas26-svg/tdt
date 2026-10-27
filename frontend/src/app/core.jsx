@@ -2487,7 +2487,7 @@ function GenericImportModal({ titleKey, hintKey, templateName, fields, onImport,
                   + t("im_cur_keep_note").replace("{cur}", curEff).replace("{local}", C.ccyOfCountry(country) || "VND")
                 : (!cur ? t("im_cur_auto_note").replace("{cur}", curEff).replace("{c}", country === "All" ? t("all") : country) + " " : "")
                   + (curEff === "VND" ? t("pol_import_currency_vnd")
-                    : t("pol_import_currency_note").replace("{cur}", curEff).replace("{rate}", C.fmtNum((C.CURRENCIES[curEff] || { rate: 1 }).rate)) + " " + t("im_cur_src_note").replace("{cur}", curEff))}
+                    : t("pol_import_currency_note").replace("{cur}", curEff).replace("{rate}", C.fmtNum((C.CURRENCIES[curEff] || { rate: 1 }).rate)) + " " + t("im_cur_src_note").replaceAll("{cur}", curEff))}
             </small>}
           </div>
           <div className="map-grid">

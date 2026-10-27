@@ -1585,7 +1585,7 @@ function POImportModal({ onClose }) {
             <small className="import-currency-hint">
               {!cur ? t("im_cur_auto_note").replace("{cur}", curEff).replace("{c}", poCountry) + " " : ""}
               {curEff === "VND" ? t("pol_import_currency_vnd")
-                : t("pol_import_currency_note").replace("{cur}", curEff).replace("{rate}", PO.fmtNum((PO.CURRENCIES[curEff] || { rate: 1 }).rate)) + " " + t("im_cur_src_note").replace("{cur}", curEff)}
+                : t("pol_import_currency_note").replace("{cur}", curEff).replace("{rate}", PO.fmtNum((PO.CURRENCIES[curEff] || { rate: 1 }).rate)) + " " + t("im_cur_src_note").replaceAll("{cur}", curEff)}
             </small>
             {amountCur ? <small className="import-currency-hint" style={{ color: "var(--teal-dark)", fontWeight: 600 }}>
               {t("pol_amount")}: {String(headers[map.amount] || "").slice(0, 44)} → {amountCur}{amountCur === "VND" ? "" : " × " + PO.fmtNum(PO.CURRENCIES[amountCur].rate)}
