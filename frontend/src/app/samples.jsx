@@ -100,23 +100,12 @@ function SamplesPage({ openCustomer, openProject }) {
 
   return (
     <div className="page">
-      <header className="page-head">
+      <header className="page-head list-head">
         <div>
           <h1>{t("smp_title")}</h1>
           <p className="page-sub">{list.length} {t("smp_count")}</p>
         </div>
         <div className="head-actions">
-          <div className="search-box search-box-sm">
-            <Icon d={ICONS.search} size={15} />
-            <input value={q} onChange={e => setQ(e.target.value)} placeholder={t("cu_company") + " / " + t("smp_product_code") + "…"} />
-          </div>
-          <select className="select" value={status} onChange={e => setStatus(e.target.value)}>
-            <option value="">{t("smp_test_status")}: {t("all")}</option>
-            {SM.SAMPLE_STATUSES.map(s => <option key={s} value={s}>{t("smp_status_" + s.replace(/\s+/g, "_")) || s}</option>)}
-          </select>
-          <button className={"btn btn-ghost" + (advancedActive ? " btn-filter-active" : "")} onClick={() => setShowAdvanced(v => !v)}>
-            🔍 {t("smp_advanced_filter")}
-          </button>
           {canExport && canExport("samples") && <ExportMenu name="samples"
             all={scoped} filtered={list}
             map={s => {
@@ -148,6 +137,19 @@ function SamplesPage({ openCustomer, openProject }) {
           <button className="btn btn-primary" onClick={() => setCreating(true)}><Icon d={ICONS.plus} size={15} /> {t("smp_new")}</button>
         </div>
       </header>
+      <div className="list-toolbar">
+        <div className="search-box">
+          <Icon d={ICONS.search} size={15} />
+          <input value={q} onChange={e => setQ(e.target.value)} placeholder={t("cu_company") + " / " + t("smp_product_code") + "…"} />
+        </div>
+        <select className="select" value={status} onChange={e => setStatus(e.target.value)}>
+          <option value="">{t("smp_test_status")}: {t("all")}</option>
+          {SM.SAMPLE_STATUSES.map(s => <option key={s} value={s}>{t("smp_status_" + s.replace(/\s+/g, "_")) || s}</option>)}
+        </select>
+        <button className={"btn btn-ghost" + (advancedActive ? " btn-filter-active" : "")} onClick={() => setShowAdvanced(v => !v)}>
+          <Icon d={ICONS.pipelines} size={14} /> {t("smp_advanced_filter")}
+        </button>
+      </div>
 
       {showAdvanced && (
         <div className="card adv-filter-panel">

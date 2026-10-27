@@ -104,24 +104,12 @@ function QuotationsPage({ openCustomer, openProject, openPOFromQuote, selected, 
 
   return (
     <div className="page">
-      <header className="page-head">
+      <header className="page-head list-head">
         <div>
           <h1>{t("qt_title")}</h1>
           <p className="page-sub">{list.length} {t("qt_count")} · {money(openValue)}</p>
         </div>
         <div className="head-actions">
-          <select className="select" value={currency} onChange={e => setCurrency(e.target.value)}>
-            {Object.keys(QT.CURRENCIES).map(c => <option key={c} value={c}>{c}</option>)}
-          </select>
-          <div className="search-box search-box-sm">
-            <Icon d={ICONS.search} size={15} />
-            <input value={q} onChange={e => setQ(e.target.value)} placeholder={t("cu_company") + " / " + t("qt_no") + "…"} />
-          </div>
-          <select className="select" value={status} onChange={e => setStatus(e.target.value)}>
-            <option value="">{t("qt_status")}: {t("all")}</option>
-            {QT.QUOTE_STATUSES.map(s => <option key={s} value={s}>{t("qt_status_" + s)}</option>)}
-          </select>
-          <FilterSelect value={picF} onChange={setPicF} options={pics} allLabel={t("pol_pic") + ": " + t("all")} />
           {canExport && canExport("quotations") && <ExportMenu name="quotations"
             all={scoped} filtered={list}
             map={q => {
@@ -158,6 +146,20 @@ function QuotationsPage({ openCustomer, openProject, openPOFromQuote, selected, 
           <button className="btn btn-primary" onClick={() => setCreating(true)}><Icon d={ICONS.plus} size={15} /> {t("qt_new")}</button>
         </div>
       </header>
+      <div className="list-toolbar">
+        <div className="search-box">
+          <Icon d={ICONS.search} size={15} />
+          <input value={q} onChange={e => setQ(e.target.value)} placeholder={t("cu_company") + " / " + t("qt_no") + "…"} />
+        </div>
+        <FilterSelect value={picF} onChange={setPicF} options={pics} allLabel={t("pol_pic") + ": " + t("all")} />
+        <select className="select" value={status} onChange={e => setStatus(e.target.value)}>
+          <option value="">{t("qt_status")}: {t("all")}</option>
+          {QT.QUOTE_STATUSES.map(s => <option key={s} value={s}>{t("qt_status_" + s)}</option>)}
+        </select>
+        <select className="select list-ccy" value={currency} onChange={e => setCurrency(e.target.value)}>
+          {Object.keys(QT.CURRENCIES).map(c => <option key={c} value={c}>{c}</option>)}
+        </select>
+      </div>
 
       <div className="kpi-row kpi-row-5">
         {QT.QUOTE_STATUSES.map(s => (
