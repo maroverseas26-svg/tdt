@@ -52,7 +52,10 @@ function AppProvider({ children, tweaks }) {
     const before = new Map(users.map(u => [u.id, JSON.stringify(u)]));
     const clean = next.map(({ password, ...u }) => u);
     setUsersState(clean); C.saveJSON(C.LS.users, clean);
-    next.forEach((u, i) => { if (u.password || before.get(u.id) !== JSON.stringify(clean[i])) C.API.saveUser(u); });
+    // Resolves to the Worker's reply for each account that was saved, so a caller (the
+    // Permissions page) can show "Saving… / Saved" and name the accounts that failed.
+    return Promise.all(next.filter((u, i) => u.password || before.get(u.id) !== JSON.stringify(clean[i]))
+      .map(u => C.API.saveUser(u).then(r => ({ id: u.id, ok: r.ok, error: r.error || r.status }), e => ({ id: u.id, ok: false, error: String(e) }))));
   };
   const updateUser = (id, patch) => setUsers(users.map(u => u.id === id ? { ...u, ...patch } : u));
 
@@ -77,6 +80,9 @@ function AppProvider({ children, tweaks }) {
   }, []);
   const authed = authReady && !!user;
 
+  // True once the Worker's account list has replaced the local copy — the Permissions page
+  // derives role module lists from real accounts only after this.
+  const [usersSynced, setUsersSynced] = useState(false);
   const [roles, setRolesState] = useState(() => C.loadJSON(C.LS.roles, C.SEED_ROLES));
   const setRoles = (r) => { setRolesState(r); C.saveJSON(C.LS.roles, r); };
   const roleOf = useCallback((u) => {
@@ -782,6 +788,7 @@ function AppProvider({ children, tweaks }) {
           try { localStorage.setItem(C.LS.users, JSON.stringify(list)); } catch (e) {}
         }
       } catch (e) {}
+      if (on) setUsersSynced(true);
     })();
     return () => { on = false; };
   }, [authed]);
@@ -1664,7 +1671,7 @@ function AppProvider({ children, tweaks }) {
   const forecastLive = useMemo(() => forecast.filter(f => !f._deleted), [forecast]);
 
   const value = {
-    t, lang, setLang, users, setUsers, updateUser, roles, setRoles, roleOf,
+    t, lang, setLang, users, setUsers, updateUser, usersSynced, roles, setRoles, roleOf,
     customers, projects: projectsLive, activity, addActivity,
     user, authReady, isBoss, isCountryMgr, teamCodes, assignableCodes, assignablePics, allSalesCodes, login, logout, updateCustomer, updateStatus, moveToStage, addCustomer, addCustomersBulk, addContactLog,
     logs, addLog, logsFor,

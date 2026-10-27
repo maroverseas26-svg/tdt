@@ -1278,6 +1278,7 @@
       if (!r.ok) console.warn("[API] save user " + u.id + " failed", r.error || r.status);
       return r;
     },
+    setPassword(id, password) { return this.call("POST", "/api/users/" + encodeURIComponent(id) + "/password", { password }); },
   };
   // A 401 from the data/account API means the session expired or was revoked (password
   // change, account disabled): tell the app to show the sign-in screen.
