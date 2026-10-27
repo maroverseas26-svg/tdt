@@ -2057,6 +2057,7 @@ function lineItemTotals(items) {
 // filter products by name / code / grade / EDP; click or Enter selects one.
 // onPick(text, product|null) fires on selection or free-text edit.
 function SkuInput({ products, value, onPick, placeholder }) {
+  const { t } = useApp();
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);
   const [hi, setHi] = useState(0);
@@ -2094,7 +2095,7 @@ function SkuInput({ products, value, onPick, placeholder }) {
         }} />
       {open && (
         <div className="sku-pop">
-          {filtered.length === 0 && <div className="sku-empty">Không tìm thấy SKU</div>}
+          {filtered.length === 0 && <div className="sku-empty">{t("li_no_sku")}</div>}
           {filtered.map((p, i) => (
             <button type="button" key={p.id} className={"sku-opt" + (i === hi ? " hi" : "")}
               onMouseEnter={() => setHi(i)} onMouseDown={e => { e.preventDefault(); choose(p); }}>
@@ -2155,6 +2156,7 @@ function structFields(p) {
 }
 // Searchable Product Code (Mã SP) combobox. onPick(code, variants) fires on select.
 function CodeCombo({ products, value, onPick, placeholder }) {
+  const { t } = useApp();
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);
   const [hi, setHi] = useState(0);
@@ -2177,7 +2179,7 @@ function CodeCombo({ products, value, onPick, placeholder }) {
   const choose = (g) => { onPick(g.code, g.variants); setQ(""); setOpen(false); };
   return (
     <div className="sku-combo" ref={wrapRef}>
-      <input className="input" value={text} placeholder={placeholder || "Mã SP…"}
+      <input className="input" value={text} placeholder={placeholder || t("li_code_ph")}
         onFocus={() => { setQ(value || ""); setHi(0); setOpen(true); }}
         onChange={e => { setQ(e.target.value); setHi(0); setOpen(true); }}
         onKeyDown={e => {
@@ -2188,7 +2190,7 @@ function CodeCombo({ products, value, onPick, placeholder }) {
         }} />
       {open && (
         <div className="sku-pop">
-          {filtered.length === 0 && <div className="sku-empty">Không tìm thấy mã SP</div>}
+          {filtered.length === 0 && <div className="sku-empty">{t("li_no_code")}</div>}
           {filtered.map((g, i) => {
             const grades = [...new Set(g.variants.map(v => v.grade).filter(Boolean))];
             return (
@@ -2212,6 +2214,7 @@ function structHay(p) {
   return [structLabel(p), pcOf(p), p.itmref || "", p.grade || "", p.productType || "", p.width ?? "", p.length ?? ""].join(" ").toLowerCase();
 }
 function StructCombo({ products, value, code, onPick, disabled, placeholder }) {
+  const { t } = useApp();
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);
   const [hi, setHi] = useState(0);
@@ -2262,7 +2265,7 @@ function StructCombo({ products, value, code, onPick, disabled, placeholder }) {
         }} />
       {open && (
         <div className="sku-pop">
-          {filtered.length === 0 && <div className="sku-empty">Không có mã cấu trúc nào khớp — mã này chưa có trên hệ thống</div>}
+          {filtered.length === 0 && <div className="sku-empty">{t("li_no_struct")}</div>}
           {filtered.map((p, i) => (
             <button type="button" key={p.id} className={"sku-opt" + (i === hi ? " hi" : "")}
               onMouseEnter={() => setHi(i)} onMouseDown={e => { e.preventDefault(); choose(p); }}>
@@ -2328,7 +2331,7 @@ function ProductLineItems({ items, onChange, products: allProducts, t, cur, coun
         const vs = variantsForCode(products, code);
         return (
         <div className="li-row" key={i}>
-          <CodeCombo products={products} value={code} placeholder="Mã SP…"
+          <CodeCombo products={products} value={code} placeholder={t("li_code_ph")}
             onPick={(c, variants) => pickCode(i, c, variants)} />
           <div className="li-ro">{it.grade || dim}</div>
           <div className="li-ro">{it.productType || dim}</div>

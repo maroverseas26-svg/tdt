@@ -242,7 +242,7 @@ function QuotationsPage({ openCustomer, openProject, openPOFromQuote, selected, 
       {canDelete && <BulkBar count={sel.count} noun={t("nav_quotations")} allIds={list.map(x => x.id)} onSelectAll={ids => sel.setSelected(new Set(ids))} onDelete={() => crmConfirm(t("bulk_confirm"), () => { deleteQuotations([...sel.selected]); sel.clear(); })} onClear={sel.clear} />}
 
       {creating && false && <QuotationFormModal onClose={() => setCreating(false)} />}
-      {importing && <GenericImportModal titleKey="qt_new" hintKey="qt_import_hint" templateName="quotations" fields={QUOTE_IMPORT_FIELDS} storeAsEntered
+      {importing && <GenericImportModal titleKey="qt_import_title" hintKey="qt_import_hint" templateName="quotations" fields={QUOTE_IMPORT_FIELDS} storeAsEntered
         onClose={() => setImporting(false)}
         onImport={(items, { cur }) => {
           const num = (v) => parseFloat(String(v || "").replace(/[^\d.-]/g, "")) || 0;
@@ -444,7 +444,7 @@ function QuotationFormModal({ onClose, presetCustomerId, presetProjectId, asPage
           </select>
         </Field>
         <Field label={t("qt_approved_by")}>
-          <input className="input" value={f.approvedBy} onChange={e => set("approvedBy", e.target.value)} placeholder="Mr. Hoang (nếu giảm giá dưới sàn)" />
+          <input className="input" value={f.approvedBy} onChange={e => set("approvedBy", e.target.value)} placeholder={t("qt_approved_ph")} />
         </Field>
         <Field label={t("pol_pic")}>
           {(isBoss || assignablePics.length > 1) ? (

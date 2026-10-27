@@ -315,7 +315,7 @@ function ProjectsPage({ openCustomer, newProjectFor, clearNewProjectFor, selecte
         presetCustomerId={newProjectFor}
         onClose={() => { setCreating(false); clearNewProjectFor && clearNewProjectFor(); }} />}
       {detail && <ProjectDetailModal id={detail} onClose={() => setDetail(null)} openCustomer={openCustomer} />}
-      {importing && <GenericImportModal titleKey="pr_new" hintKey="pr_import_hint" templateName="projects" fields={PROJECT_IMPORT_FIELDS}
+      {importing && <GenericImportModal titleKey="pr_import_title" hintKey="pr_import_hint" templateName="projects" fields={PROJECT_IMPORT_FIELDS}
         onClose={() => setImporting(false)}
         onImport={(items, { cur }) => {
           const rate = (PR.CURRENCIES[cur] ? PR.CURRENCIES[cur].rate : 1);

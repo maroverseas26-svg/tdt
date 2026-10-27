@@ -272,7 +272,7 @@ function SamplesPage({ openCustomer, openProject }) {
 
       {canDelete && <BulkBar count={sel.count} noun={t("nav_samples")} allIds={list.map(s => s.id)} onSelectAll={ids => sel.setSelected(new Set(ids))} onDelete={() => crmConfirm(t("bulk_confirm"), () => { deleteSamples([...sel.selected]); sel.clear(); })} onClear={sel.clear} />}
 
-      {importing && <GenericImportModal titleKey="smp_new" hintKey="smp_import_hint" templateName="samples" fields={SAMPLE_IMPORT_FIELDS}
+      {importing && <GenericImportModal titleKey="smp_import_title" hintKey="smp_import_hint" templateName="samples" fields={SAMPLE_IMPORT_FIELDS}
         onClose={() => setImporting(false)}
         onImport={(items) => {
           const num = (v) => parseFloat(String(v || "").replace(/[^\d.-]/g, "")) || 0;

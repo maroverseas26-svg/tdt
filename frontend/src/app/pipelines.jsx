@@ -147,7 +147,7 @@ function PipelinesPage({ openCustomer, openProject }) {
                     onDragStart={p._type || !canMove ? undefined : e => e.dataTransfer.setData("text/project-id", p.id)}
                     onClick={() => p._type ? openCustomer(p.customerId) : (openProject ? openProject(p.id) : openCustomer(p.customerId))}>
                     <strong>{p.name}{p._type === "sample" ? <span className="kcard-tag">{t("nav_samples")}</span> : p._type === "quote" ? <span className="kcard-tag">{t("nav_quotations") || "Quote"}</span> : null}</strong>
-                    <small className="kcard-status">{custName(p.customerId)}{p._type === "sample" && p.sub ? " · " + p.sub : ""}</small>
+                    <small className="kcard-status">{custName(p.customerId)}{p._type === "sample" && p.sub ? " · " + (t("smp_status_" + p.sub.replace(/\s+/g, "_")) || p.sub) : ""}</small>
                     <div className="kcard-foot">
                       <span className="kcard-meta">{p._type === "sample" ? "—" : (PL.fmtMoneyFull ? PL.fmtMoneyFull(p.value || 0, currency) : money(p.value || 0))}</span>
                       {p.following && <OwnerChip code={p.following} t={t} />}
