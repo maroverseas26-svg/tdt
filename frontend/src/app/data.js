@@ -1325,8 +1325,11 @@
 
   // ---- duplicate detection ----
   const LEGAL_WORDS = /\b(co|ltd|limited|company|corporation|corp|public|pcl|plc|inc|head office|thailand|th)\b/g;
+  // Vietnamese diacritics are folded first ("Hộ" → "ho", "Đ" → "d"), so the Latin-only
+  // regex below keeps those letters instead of dropping them. Thai is untouched by NFD.
   function normName(s) {
     return (s || "").toLowerCase()
+      .normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\u0111/g, "d")
       .replace(/\(.*?\)/g, " ")
       .replace(/[^a-z0-9\u0E00-\u0E7F ]+/g, " ")
       .replace(LEGAL_WORDS, " ")

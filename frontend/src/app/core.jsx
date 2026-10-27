@@ -1514,6 +1514,9 @@ function AppProvider({ children, tweaks }) {
     // so the deletion propagates to every user and is never resurrected by a stale copy.
     const nextExtras = extras.map(c => s.has(c.id) ? { ...c, _deleted: true, _updated: NOW() } : c);
     setExtras(nextExtras); C.saveJSON(C.LS.extras, nextExtras);
+    // Persist the tombstones like any edit, or the delete stays in this browser only.
+    const gone = nextExtras.filter(c => s.has(c.id));
+    if (gone.length) syncRows("customers", gone);
     const seedIds = ids.filter(id => !inExtras.has(id));
     if (seedIds.length) setOverrides(o => { const n = { ...o }; seedIds.forEach(id => { n[id] = { ...(n[id] || {}), _deleted: true }; }); C.saveJSON(C.LS.custOverrides, n); return n; });
   };
@@ -2555,7 +2558,7 @@ function GenericImportModal({ titleKey, hintKey, templateName, fields, onImport,
                   + t("im_cur_keep_note").replace("{cur}", curEff).replace("{local}", C.ccyOfCountry(country) || "VND")
                 : (!cur ? t("im_cur_auto_note").replace("{cur}", curEff).replace("{c}", country === "All" ? t("all") : country) + " " : "")
                   + (curEff === "VND" ? t("pol_import_currency_vnd")
-                    : t("pol_import_currency_note").replace("{cur}", curEff).replace("{rate}", C.fmtNum((C.CURRENCIES[curEff] || { rate: 1 }).rate)) + " " + t("im_cur_src_note").replace("{cur}", curEff))}
+                    : t("pol_import_currency_note").replace("{cur}", curEff).replace("{rate}", C.fmtNum((C.CURRENCIES[curEff] || { rate: 1 }).rate)) + " " + t("im_cur_src_note").replaceAll("{cur}", curEff))}
             </small>}
           </div>
           <div className="map-grid">
@@ -2843,8 +2846,8 @@ function CountryDropdown() {
   const opts = ["All", ...visibleCountries];
   return (
     <div className="dropdown" onClick={e => e.stopPropagation()}>
-      <button className="top-pill" onClick={() => setOpen(o => !o)} title={t("all_countries")} style={countryFilter !== "All" ? { borderColor: "var(--teal)", color: "var(--teal-dark)" } : undefined}>
-        <Icon d='<path d="M12 21s-7-5.5-7-11a7 7 0 0 1 14 0c0 5.5-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/>' size={15} /> {label} <span className="user-caret">▾</span>
+      <button className="top-pill" onClick={() => setOpen(o => !o)} title={label} style={countryFilter !== "All" ? { borderColor: "var(--teal)", color: "var(--teal-dark)" } : undefined}>
+        <Icon d='<path d="M12 21s-7-5.5-7-11a7 7 0 0 1 14 0c0 5.5-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/>' size={15} /> <span className="top-pill-label">{label}</span> <span className="user-caret">▾</span>
       </button>
       {open && (
         <div className="dropdown-menu">
@@ -2870,8 +2873,8 @@ function LangDropdown() {
   }, [open]);
   return (
     <div className="dropdown" onClick={e => e.stopPropagation()}>
-      <button className="top-pill" onClick={() => setOpen(o => !o)}>
-        <Icon d={ICONS.globe} size={15} /> {lang.toUpperCase()} <span className="user-caret">▾</span>
+      <button className="top-pill" onClick={() => setOpen(o => !o)} title={lang.toUpperCase()}>
+        <Icon d={ICONS.globe} size={15} /> <span className="top-pill-label">{lang.toUpperCase()}</span> <span className="user-caret">▾</span>
       </button>
       {open && (
         <div className="dropdown-menu">

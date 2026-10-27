@@ -172,7 +172,7 @@ function TargetPage() {
           {isBoss && <MoreMenu items={[
             (yearTargets && Object.keys(yearTargets).length > 0 || (yearGroups && Object.keys(yearGroups).length > 0)) && {
               key: "del", label: t("tg_delete"), icon: ICONS.alert, danger: true,
-              onClick: () => crmConfirm(t("tg_delete_confirm").replace("{y}", year), () => {
+              onClick: () => crmConfirm(t("tg_delete_confirm").replaceAll("{y}", year), () => {
                 const nt = { ...targets }; delete nt[year]; setTargets(nt);
                 const ng = { ...targetGroups }; delete ng[year]; setTargetGroups(ng);
               }) },

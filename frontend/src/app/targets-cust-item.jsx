@@ -226,9 +226,9 @@ function TgCustImportModal({ t, year, onClose }) {
 
   // The file names its salesman in full ("Hoàng Lê Khương"); the app keys reps by sales code
   // ("KHUONG"). Resolve one to the other or the imported rows never line up with a rep.
-  // CRM.normName strips non-ASCII letters rather than folding them ("Khương" → "kh ng"), so
-  // the match is done on a diacritic-FOLDED key, and on the last name token as well — that
-  // is the part Vietnamese sales codes are built from.
+  // The match is done on a diacritic-FOLDED, upper-case key (CRM.normName also drops legal
+  // words and punctuation), and on the last name token as well — that is the part
+  // Vietnamese sales codes are built from.
   const fold = (v) => String(v == null ? "" : v).normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\u0111/g, "d").replace(/\u0110/g, "D").trim().toUpperCase();
   const lastTok = (v) => { const p = fold(v).split(/\s+/).filter(Boolean); return p.length ? p[p.length - 1] : ""; };
   const picResolve = React.useMemo(() => {

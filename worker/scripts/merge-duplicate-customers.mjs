@@ -50,8 +50,9 @@ const BY = "MERGE";
 const LEGAL_WORDS = /\b(co|ltd|limited|company|corporation|corp|public|pcl|plc|inc|head office|thailand|th)\b/g;
 function normName(s) {
   return (s || "").toLowerCase()
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\u0111/g, "d")
     .replace(/\(.*?\)/g, " ")
-    .replace(/[^a-z0-9฀-๿ ]+/g, " ")
+    .replace(/[^a-z0-9\u0E00-\u0E7F ]+/g, " ")
     .replace(LEGAL_WORDS, " ")
     .replace(/\s+/g, " ").trim();
 }
@@ -103,7 +104,10 @@ async function writeRows(table, rows) {
 }
 
 // ---- helpers ---------------------------------------------------------------------------
-const isEmpty = (v) => v === undefined || v === null || v === false || (typeof v === "string" && !v.trim()) ||
+// Placeholder text ("Unassigned", "N/A", "-"…) counts as empty: never copied, and a master
+// holding one may be filled.
+const PLACEHOLDER = /^(unassigned|not assigned|n\/?a|none|null|undefined|tbd|unknown|chưa phân công|chưa có|không rõ|[-–—?.]+)$/i;
+const isEmpty = (v) => v === undefined || v === null || v === false || (typeof v === "string" && (!v.trim() || PLACEHOLDER.test(v.trim()))) ||
   (Array.isArray(v) && !v.length) || (typeof v === "object" && !Array.isArray(v) && !Object.keys(v).length);
 const nonEmptyCount = (c) => Object.keys(c).filter((k) => !k.startsWith("_") && !isEmpty(c[k])).length;
 // Comparable key for a date field ("YYYY-MM-DD", "YYYY-MM-DD HH:mm", ISO, or anything Date reads).
