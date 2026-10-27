@@ -53,19 +53,24 @@ const QX_LIBS = {
   html2pdf: { src: "https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js", integrity: "sha384-Yv5O+t3uE3hunW8uyrbpPW3iw6/5/Y7HitWJBLgqfMoA36NogMmy+8wWZMpn3HWc" },
 };
 const qxLoading = {};
+// Rejects with a readable reason (blocked by an extension or the network, or a stall) instead of
+// leaving the export hanging; a failed load is retried on the next click.
 function qxLib(name) {
   if (window[name]) return Promise.resolve(window[name]);
   if (!qxLoading[name]) {
     qxLoading[name] = new Promise((resolve, reject) => {
+      const fail = (why) => { delete qxLoading[name]; clearTimeout(timer); s.remove(); reject(new Error(`could not load ${name} from ${new URL(QX_LIBS[name].src).host} (${why})`)); };
       const s = document.createElement("script");
+      const timer = setTimeout(() => fail("timed out"), 30000);
       s.src = QX_LIBS[name].src; s.integrity = QX_LIBS[name].integrity; s.crossOrigin = "anonymous";
-      s.onload = () => (window[name] ? resolve(window[name]) : reject(new Error(name + " failed to load")));
-      s.onerror = () => { delete qxLoading[name]; reject(new Error(name + " failed to load")); };
+      s.onload = () => { clearTimeout(timer); window[name] ? resolve(window[name]) : fail("not usable"); };
+      s.onerror = () => fail("blocked or offline");
       document.head.appendChild(s);
     });
   }
   return qxLoading[name];
 }
+const qxErrText = (e) => (e && e.message) || String(e || "unknown error");
 
 const qxRate = (ccy) => ((QX.CURRENCIES || {})[ccy] || { rate: 1 }).rate;
 const qxRound = (v, d) => { const m = Math.pow(10, d); return Math.round((+v || 0) * m) / m; };
@@ -105,11 +110,17 @@ async function qxWriteTemplates(value) {
 function qxBlobToBase64(blob) {
   return new Promise((resolve, reject) => { const r = new FileReader(); r.onload = () => resolve(String(r.result).split(",")[1] || ""); r.onerror = reject; r.readAsDataURL(blob); });
 }
-function qxDownload(blob, filename) {
+// Browsers without a[download] (older iOS Safari) get the file opened in a new tab instead.
+const QX_CAN_DOWNLOAD = typeof document !== "undefined" && "download" in document.createElement("a");
+// Save one built file ({filename, url}). Called straight from a click where possible: a
+// download fired after async work has no user gesture, and Chrome/Edge block a second one
+// ("multiple downloads") while Safari ignores it. The object URL stays alive until the page
+// replaces or drops the file, so a slow save never meets a revoked URL.
+function qxSaveFile(f) {
+  if (!QX_CAN_DOWNLOAD) { window.open(f.url, "_blank"); return; }
   const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob); a.download = filename;
+  a.href = f.url; a.download = f.filename; a.rel = "noopener";
   document.body.appendChild(a); a.click(); a.remove();
-  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
 }
 function qxLogoBlob() {
   const url = window.__resources && window.__resources.quoteLogo;
@@ -161,6 +172,7 @@ function qxInitDraft(q, cust, user, templates, market) {
     termsTitle: saved.termsTitle || tpl.termsTitle,
     terms: saved.terms || tpl.terms.slice(),
     format: saved.format || "both",
+    showUsd: saved.showUsd != null ? !!saved.showUsd : tpl.showUsd != null ? !!tpl.showUsd : true,
   };
 }
 
@@ -197,6 +209,10 @@ function QuoteDoc({ d, rows, logoUrl, docRef }) {
   const cell = { border: "1px solid #222", padding: "6px 8px", verticalAlign: "middle" };
   const head = { ...cell, background: "#2A8C6D", color: "#fff", fontWeight: 700, textAlign: "center" };
   const lbl = { ...cell, fontWeight: 700, whiteSpace: "nowrap" };
+  // Without the USD column the table has 9 columns: the Note column takes its width, and the
+  // last merged cell of each header row is one column narrower.
+  const usd = d.showUsd !== false, cols = usd ? 10 : 9, cut = usd ? 0 : 1;
+  const widths = usd ? [7.5, 9.5, 11, 8, 8, 10.5, 8.5, 10, 8.5, 33] : [7.5, 9.5, 11, 8, 8, 10.5, 10, 8.5, 41.5];
   return (
     <div ref={docRef} className="qx-doc" style={{ width: QX_DOC_WIDTH, boxSizing: "border-box", background: "#fff", color: "#111", fontFamily: "Arial, Helvetica, 'Leelawadee UI', Tahoma, sans-serif", fontSize: 12, padding: 16 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
@@ -206,16 +222,18 @@ function QuoteDoc({ d, rows, logoUrl, docRef }) {
         </div>
       </div>
       <table style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed" }}>
-        <colgroup>{[7.5, 9.5, 11, 8, 8, 10.5, 8.5, 10, 8.5, 33].map((w, i) => <col key={i} style={{ width: w + "%" }} />)}</colgroup>
+        <colgroup>{widths.map((w, i) => <col key={i} style={{ width: w + "%" }} />)}</colgroup>
         <tbody>
-          <tr><td colSpan={10} style={{ ...cell, background: "#377F74", color: "#fff", fontSize: 24, fontWeight: 700, textAlign: "center", padding: "12px 8px" }}>Quotation and List of Products</td></tr>
-          <tr><td style={lbl}>Attend:</td><td colSpan={4} style={cell}>{d.attend}</td><td colSpan={2} style={lbl}>Term of payment:</td><td colSpan={3} style={cell}>{d.payment}</td></tr>
-          <tr><td style={lbl}>Company:</td><td colSpan={4} style={cell}>{d.custName}</td><td style={lbl}>Quotation No:</td><td colSpan={2} style={{ ...cell, textAlign: "center" }}>{d.quoteNo}</td><td style={lbl}>Date:</td><td style={cell}>{QX.fmtDate ? QX.fmtDate(d.date) : d.date}</td></tr>
-          <tr><td style={lbl}>Tax ID</td><td colSpan={4} style={cell}>{d.taxId}</td><td colSpan={2} style={lbl}>Exchange rate ({QX_CCY_NAME[d.quoteCcy] || d.quoteCcy}/USD)</td><td colSpan={3} style={cell}>{qxFmt(d.usdRate, 3)}</td></tr>
-          <tr><td style={lbl}>Address:</td><td colSpan={4} style={cell}>{d.address}</td><td colSpan={2} style={lbl}>Validity Effective:</td><td colSpan={3} style={cell}>{d.validity}</td></tr>
+          <tr><td colSpan={cols} style={{ ...cell, background: "#377F74", color: "#fff", fontSize: 24, fontWeight: 700, textAlign: "center", padding: "12px 8px" }}>Quotation and List of Products</td></tr>
+          <tr><td style={lbl}>Attend:</td><td colSpan={4} style={cell}>{d.attend}</td><td colSpan={2} style={lbl}>Term of payment:</td><td colSpan={3 - cut} style={cell}>{d.payment}</td></tr>
+          <tr><td style={lbl}>Company:</td><td colSpan={4} style={cell}>{d.custName}</td><td style={lbl}>Quotation No:</td><td colSpan={2 - cut} style={{ ...cell, textAlign: "center" }}>{d.quoteNo}</td><td style={lbl}>Date:</td><td style={cell}>{QX.fmtDate ? QX.fmtDate(d.date) : d.date}</td></tr>
+          <tr><td style={lbl}>Tax ID</td><td colSpan={4} style={cell}>{d.taxId}</td>{usd
+            ? <React.Fragment><td colSpan={2} style={lbl}>Exchange rate ({QX_CCY_NAME[d.quoteCcy] || d.quoteCcy}/USD)</td><td colSpan={3} style={cell}>{qxFmt(d.usdRate, 3)}</td></React.Fragment>
+            : <td colSpan={4} style={cell}></td>}</tr>
+          <tr><td style={lbl}>Address:</td><td colSpan={4} style={cell}>{d.address}</td><td colSpan={2} style={lbl}>Validity Effective:</td><td colSpan={3 - cut} style={cell}>{d.validity}</td></tr>
           <tr>
             <td style={head}>No.</td><td style={head}>Item</td><td style={head}>Type of Ribbon</td><td colSpan={2} style={head}>Specifications (Wmm X LM)</td>
-            <td style={head}>Quantity (MOQ)</td><td style={head}>Unit Price (USD)</td><td style={head}>Unit Price ({d.quoteCcy}) In {d.market}</td><td style={head}>Amount ({d.quoteCcy})</td><td style={head}>Note</td>
+            <td style={head}>Quantity (MOQ)</td>{usd && <td style={head}>Unit Price (USD)</td>}<td style={head}>Unit Price ({d.quoteCcy}) In {d.market}</td><td style={head}>Amount ({d.quoteCcy})</td><td style={head}>Note</td>
           </tr>
           {groups.map((g, gi) => g.rows.map((ri, k) => {
             const r = rows[ri];
@@ -226,7 +244,7 @@ function QuoteDoc({ d, rows, logoUrl, docRef }) {
                 {k === 0 && <td rowSpan={g.rows.length} style={{ ...cell, textAlign: "center" }}>{g.type}</td>}
                 <td style={{ ...cell, textAlign: "center" }}>{r.width}</td><td style={{ ...cell, textAlign: "center" }}>{r.length}</td>
                 <td style={{ ...cell, textAlign: "center" }}>{qxFmt(r.qty, 0)}</td>
-                <td style={{ ...cell, textAlign: "center" }}>{qxFmt(r.usd, 3)}</td>
+                {usd && <td style={{ ...cell, textAlign: "center" }}>{qxFmt(r.usd, 3)}</td>}
                 <td style={{ ...cell, textAlign: "center" }}>{qxFmt(r.unit, ud)}</td>
                 <td style={{ ...cell, textAlign: "center" }}>{qxFmt(r.amount, ud)}</td>
                 {k === 0 && <td rowSpan={g.rows.length} style={{ ...cell, whiteSpace: "pre-wrap", fontSize: 11, lineHeight: 1.35 }}>{g.note}</td>}
@@ -267,7 +285,11 @@ async function qxBuildXlsx(d, rows) {
   const ExcelJS = await qxLib("ExcelJS");
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet("QT", { pageSetup: { paperSize: 9, orientation: "landscape", fitToPage: true, fitToWidth: 1, fitToHeight: 0, margins: { left: 0.25, right: 0.25, top: 0.39, bottom: 0.39, header: 0.2, footer: 0.2 } } });
-  [11.1, 13.9, 16.2, 14.6, 11.7, 15.6, 11.9, 13.8, 11.2, 79].forEach((w, i) => { ws.getColumn(i + 1).width = w; });
+  // Columns A..J as in the template; without the USD column (G) everything after it moves one
+  // left, so the sheet ends at I and the Note column takes the freed width.
+  const usd = d.showUsd !== false;
+  const [cUnit, cAmt, Z] = usd ? ["H", "I", "J"] : ["G", "H", "I"];
+  (usd ? [11.1, 13.9, 16.2, 14.6, 11.7, 15.6, 11.9, 13.8, 11.2, 79] : [11.1, 13.9, 16.2, 14.6, 11.7, 15.6, 13.8, 11.2, 90.9]).forEach((w, i) => { ws.getColumn(i + 1).width = w; });
   const font = (o) => ({ name: "Arial", size: 12, ...o });
   const thin = { style: "thin", color: { argb: "FF000000" } };
   const box = { top: thin, left: thin, bottom: thin, right: thin };
@@ -277,28 +299,30 @@ async function qxBuildXlsx(d, rows) {
 
   const logo = await qxLogoBlob();
   if (logo) ws.addImage(wb.addImage({ buffer: await logo.arrayBuffer(), extension: "png" }), { tl: { col: 0, row: 0 }, ext: { width: 304, height: 54 } });
-  d.company.forEach((line, i) => put("J" + (i + 1), line, { font: font({ bold: i === 0 }), alignment: { horizontal: "right", vertical: "middle" } }));
+  d.company.forEach((line, i) => put(Z + (i + 1), line, { font: font({ bold: i === 0 }), alignment: { horizontal: "right", vertical: "middle" } }));
 
-  ws.mergeCells("A6:J6");
+  ws.mergeCells(`A6:${Z}6`);
   put("A6", "Quotation and List of Products", { font: font({ size: 26, bold: true, color: { argb: "FFFFFFFF" } }), fill: { type: "pattern", pattern: "solid", fgColor: { argb: "FF377F74" } }, alignment: { horizontal: "center", vertical: "middle" } });
   ws.getRow(6).height = 57;
   const L = { font: font({ bold: true }), alignment: { vertical: "middle" } };
   const V = { font: font(), alignment: { horizontal: "left", vertical: "middle", wrapText: true } };
-  [["B7:E7"], ["H7:J7"], ["B8:E8"], ["G8:H8"], ["B9:E9"], ["H9:J9"], ["B10:E10"], ["H10:J10"]].forEach(([r]) => ws.mergeCells(r));
+  ["B7:E7", `H7:${Z}7`, "B8:E8", usd && "G8:H8", "B9:E9", `H9:${Z}9`, "B10:E10", `H10:${Z}10`].filter(Boolean).forEach(r => ws.mergeCells(r));
+  const [cDateL, cDate] = usd ? ["I", "J"] : ["H", "I"];
   put("A7", "Attend: ", L); put("B7", d.attend, V); put("F7", "Term of payment:", L); put("H7", d.payment, V);
   put("A8", "Company: ", L); put("B8", d.custName, V); put("F8", "Quotation No:", L); put("G8", d.quoteNo, { ...V, alignment: { horizontal: "center", vertical: "middle" } });
-  put("I8", "Date:", L); put("J8", new Date(d.date + "T00:00:00Z"), { ...V, numFmt: "dd/mm/yyyy" });
-  put("A9", "Tax ID ", L); put("B9", d.taxId, V); put("F9", `Exchange rate (${QX_CCY_NAME[d.quoteCcy] || d.quoteCcy}/USD)`, L); put("H9", +d.usdRate || 0, { ...V, numFmt: "#,##0.000" });
+  put(cDateL + "8", "Date:", L); put(cDate + "8", new Date(d.date + "T00:00:00Z"), { ...V, numFmt: "dd/mm/yyyy" });
+  put("A9", "Tax ID ", L); put("B9", d.taxId, V);
+  if (usd) { put("F9", `Exchange rate (${QX_CCY_NAME[d.quoteCcy] || d.quoteCcy}/USD)`, L); put("H9", +d.usdRate || 0, { ...V, numFmt: "#,##0.000" }); }
   put("A10", "Address: ", L); put("B10", d.address, V); put("F10", "Validity Effective:", L); put("H10", d.validity, V);
-  border("A6:J10");
+  border(`A6:${Z}10`);
   [7, 8, 9].forEach(r => { ws.getRow(r).height = 31; }); ws.getRow(10).height = 40;
 
   ws.mergeCells("D11:E11");
   const H = { font: font({ bold: true, color: { argb: "FFFFFFFF" } }), fill: { type: "pattern", pattern: "solid", fgColor: { argb: "FF2A8C6D" } }, alignment: { horizontal: "center", vertical: "middle", wrapText: true } };
-  [["A11", "No."], ["B11", "Item"], ["C11", "Type of Ribbon "], ["D11", "Specifications (Wmm X LM)"], ["F11", "Quantity (MOQ)"], ["G11", "Unit Price (USD )"],
-    ["H11", `Unit Price (${d.quoteCcy})\nIn ${d.market} `], ["I11", `Amount (${d.quoteCcy})`], ["J11", "Note "]].forEach(([a, v]) => put(a, v, H));
+  [["A11", "No."], ["B11", "Item"], ["C11", "Type of Ribbon "], ["D11", "Specifications (Wmm X LM)"], ["F11", "Quantity (MOQ)"], usd && ["G11", "Unit Price (USD )"],
+    [cUnit + "11", `Unit Price (${d.quoteCcy})\nIn ${d.market} `], [cAmt + "11", `Amount (${d.quoteCcy})`], [Z + "11", "Note "]].filter(Boolean).forEach(([a, v]) => put(a, v, H));
   ws.getRow(11).height = 58;
-  border("A11:J11");
+  border(`A11:${Z}11`);
 
   const ud = qxUnitDigits(d.quoteCcy) ? "#,##0.00" : "#,##0";
   const C = { font: font(), alignment: { horizontal: "center", vertical: "middle", wrapText: true } };
@@ -309,16 +333,16 @@ async function qxBuildXlsx(d, rows) {
       const x = rows[ri];
       put("D" + r, +x.width || x.width, C); put("E" + r, +x.length || x.length, C);
       put("F" + r, +x.qty || 0, { ...C, numFmt: "#,##0" });
-      put("G" + r, qxRound(x.usd, 6), { ...C, numFmt: "#,##0.000" });
-      put("H" + r, qxRound(x.unit, 6), { ...C, numFmt: ud });
-      put("I" + r, { formula: `H${r}*(D${r}/1000*E${r})`, result: qxRound(x.amount, 6) }, { ...C, numFmt: ud });
+      if (usd) put("G" + r, qxRound(x.usd, 6), { ...C, numFmt: "#,##0.000" });
+      put(cUnit + r, qxRound(x.unit, 6), { ...C, numFmt: ud });
+      put(cAmt + r, { formula: `${cUnit}${r}*(D${r}/1000*E${r})`, result: qxRound(x.amount, 6) }, { ...C, numFmt: ud });
       ws.getRow(r).height = 49;
       r++;
     });
-    if (last > first) ["A", "B", "C", "J"].forEach(col => ws.mergeCells(`${col}${first}:${col}${last}`));
+    if (last > first) ["A", "B", "C", Z].forEach(col => ws.mergeCells(`${col}${first}:${col}${last}`));
     put("A" + first, gi + 1, C); put("B" + first, g.code, { ...C, font: font({ bold: true }) }); put("C" + first, g.type, C);
-    put("J" + first, g.note, { font: font({ size: 11 }), alignment: { horizontal: "left", vertical: "middle", wrapText: true } });
-    border(`A${first}:J${last}`);
+    put(Z + first, g.note, { font: font({ size: 11 }), alignment: { horizontal: "left", vertical: "middle", wrapText: true } });
+    border(`A${first}:${Z}${last}`);
   });
 
   if (d.includeCore && d.core.length) {
@@ -335,22 +359,22 @@ async function qxBuildXlsx(d, rows) {
   }
   if (d.terms.length) {
     r += 1;
-    ws.mergeCells(`A${r}:C${r}`); ws.mergeCells(`D${r}:J${r}`);
+    ws.mergeCells(`A${r}:C${r}`); ws.mergeCells(`D${r}:${Z}${r}`);
     put("A" + r, d.termsTitle, { font: font({ size: 10, bold: true }), alignment: { horizontal: "center", vertical: "middle" } });
-    border(`A${r}:J${r}`); ws.getRow(r).height = 25; r++;
+    border(`A${r}:${Z}${r}`); ws.getRow(r).height = 25; r++;
     d.terms.forEach((x, i) => {
-      ws.mergeCells(`B${r}:J${r}`);
+      ws.mergeCells(`B${r}:${Z}${r}`);
       put("A" + r, i + 1, { font: font({ size: 10 }), alignment: { horizontal: "center", vertical: "middle" } });
       put("B" + r, x, { font: font({ size: 10 }), alignment: { horizontal: "left", vertical: "middle", wrapText: true } });
-      border(`A${r}:J${r}`); ws.getRow(r).height = 28; r++;
+      border(`A${r}:${Z}${r}`); ws.getRow(r).height = 28; r++;
     });
   }
   r += 1;
-  ws.mergeCells(`A${r}:B${r}`); ws.mergeCells(`D${r}:F${r}`); ws.mergeCells(`H${r}:J${r}`);
+  ws.mergeCells(`A${r}:B${r}`); ws.mergeCells(`D${r}:F${r}`); ws.mergeCells(`H${r}:${Z}${r}`);
   const S = { font: font({ bold: true }), alignment: { horizontal: "center", vertical: "top", wrapText: true }, border: { top: thin } };
   put("A" + r, "Issued by\n" + d.issuedBy, S); put("D" + r, "Approved by", S); put("H" + r, "Customer Approved:", S);
   ws.getRow(r).height = 103;
-  ws.pageSetup.printArea = `A1:J${r}`;
+  ws.pageSetup.printArea = `A1:${Z}${r}`;
   const buf = await wb.xlsx.writeBuffer();
   return new Blob([buf], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
 }
@@ -396,6 +420,14 @@ function QuoteSendPage({ q, cust, onClose }) {
   const [editingCompany, setEditingCompany] = React.useState(false);
   const [busy, setBusy] = React.useState("");
   const [msg, setMsg] = React.useState(null);
+  // Files from the last Download, as {filename, url, kind}: offered as links so each one saves
+  // in its own click. Their object URLs are revoked when replaced, when the quote is edited
+  // (the files would be stale) and when the page closes.
+  const [ready, setReadyState] = React.useState([]);
+  const readyRef = React.useRef([]);
+  const setReady = (files) => { readyRef.current.forEach(f => URL.revokeObjectURL(f.url)); readyRef.current = files; setReadyState(files); };
+  React.useEffect(() => () => readyRef.current.forEach(f => URL.revokeObjectURL(f.url)), []);
+  React.useEffect(() => { if (readyRef.current.length) setReady([]); }, [d]);
   const logoUrl = window.__resources && window.__resources.quoteLogo;
   const markets = Object.keys(QX_DEFAULT_TEMPLATES);
   const marketOf = () => { const c = QX.normCountry((cust && cust.country) || ""); return markets.includes(c) ? c : ((user && user.countries || []).map(QX.normCountry).find(x => markets.includes(x)) || "Vietnam"); };
@@ -430,7 +462,8 @@ function QuoteSendPage({ q, cust, onClose }) {
     setEditingCompany(false);
     setD(prev => ({ ...prev, market: m, quoteCcy,
       usdRate: tpl.usdRate || qxRound(qxRate("USD") / qxRate(quoteCcy), 4), baseRate: qxRound(qxRate(prev.baseCcy) / qxRate(quoteCcy), 6),
-      termsTitle: tpl.termsTitle, terms: tpl.terms.slice(), coreTitle: tpl.coreTitle.slice(), core: tpl.core.map(r => r.slice()), includeCore: tpl.core.length > 0 }));
+      termsTitle: tpl.termsTitle, terms: tpl.terms.slice(), coreTitle: tpl.coreTitle.slice(), core: tpl.core.map(r => r.slice()), includeCore: tpl.core.length > 0,
+      showUsd: tpl.showUsd != null ? !!tpl.showUsd : prev.showUsd }));
   };
   const setCcy = (k, v) => setD(prev => {
     const next = { ...prev, [k]: v };
@@ -440,10 +473,12 @@ function QuoteSendPage({ q, cust, onClose }) {
   });
   const fileBase = `Quotation_${qxFileSafe(d.quoteNo)}_${qxFileSafe(cust && (cust.shortName || cust.name))}`;
 
+  // Each step names itself in the error, so a failure reads "Excel: could not load ExcelJS …".
+  const step = async (kind, fn) => { try { return await fn(); } catch (e) { throw new Error(kind + ": " + qxErrText(e)); } };
   const build = async () => {
     const files = [];
-    if (d.format !== "pdf") files.push({ filename: fileBase + ".xlsx", blob: await qxBuildXlsx(doc, rows) });
-    if (d.format !== "xlsx") files.push({ filename: fileBase + ".pdf", blob: await qxBuildPdf(docRef.current) });
+    if (d.format !== "pdf") files.push({ kind: "Excel", filename: fileBase + ".xlsx", blob: await step("Excel", () => qxBuildXlsx(doc, rows)) });
+    if (d.format !== "xlsx") files.push({ kind: "PDF", filename: fileBase + ".pdf", blob: await step("PDF", () => qxBuildPdf(docRef.current)) });
     // Remember the adjustments on the quotation so the next export starts from them (the
     // seller block is not one of them, and replacing exportDraft drops an old draft's copy).
     const { quoteNo, date, company, ...draft } = d;
@@ -452,10 +487,17 @@ function QuoteSendPage({ q, cust, onClose }) {
   };
   const run = async (kind) => {
     if (!companySaved) return;
-    setBusy(kind); setMsg(null);
+    setBusy(kind); setMsg(null); setReady([]);
     try {
       const files = await build();
-      if (kind === "download") { files.forEach(f => qxDownload(f.blob, f.filename)); setMsg({ ok: true, text: t("qx_downloaded") }); }
+      if (kind === "download") {
+        const out = files.map(f => ({ kind: f.kind, filename: f.filename, url: URL.createObjectURL(f.blob) }));
+        setReady(out);
+        // A single file still saves by itself; with two the browser would block one, so both
+        // wait as links (shown below the buttons).
+        if (out.length === 1) qxSaveFile(out[0]);
+        setMsg({ ok: true, text: t(out.length === 1 ? "qx_downloaded" : "qx_files_ready") });
+      }
       else {
         const payload = { quoteNo: d.quoteNo, customer: d.custName, files: await Promise.all(files.map(async f => ({ filename: f.filename, content: await qxBlobToBase64(f.blob) }))) };
         const r = await fetch("/api/quotes/send", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(payload) });
@@ -464,7 +506,7 @@ function QuoteSendPage({ q, cust, onClose }) {
         setMsg({ ok: true, text: t("qx_sent").replace("{email}", j.to) });
       }
     } catch (e) {
-      setMsg({ ok: false, text: t("qx_failed") + " (" + (e && e.message) + ")" });
+      setMsg({ ok: false, text: t("qx_failed") + " (" + qxErrText(e) + ")" });
     }
     setBusy("");
   };
@@ -499,7 +541,7 @@ function QuoteSendPage({ q, cust, onClose }) {
     setBusy("default"); setMsg(null);
     try {
       const fresh = await qxReadTemplates();
-      const next = { ...fresh, [m]: { ...(fresh[m] || {}), currency: d.quoteCcy, usdRate: +d.usdRate || undefined, termsTitle: d.termsTitle, terms: d.terms, coreTitle: d.coreTitle, core: d.core } };
+      const next = { ...fresh, [m]: { ...(fresh[m] || {}), currency: d.quoteCcy, usdRate: +d.usdRate || undefined, showUsd: d.showUsd !== false, termsTitle: d.termsTitle, terms: d.terms, coreTitle: d.coreTitle, core: d.core } };
       await qxWriteTemplates(next);
       setSaved(next);
       setMsg({ ok: true, text: t("qx_default_saved").replace("{c}", m) });
@@ -523,7 +565,16 @@ function QuoteSendPage({ q, cust, onClose }) {
           <button className="btn btn-primary" disabled={!!busy || !companySaved || !(user && user.email)} title={companySaved ? undefined : t("qx_company_required").replace("{c}", d.market)} onClick={() => run("email")}>{busy === "email" ? "…" : t("qx_email_me").replace("{email}", (user && user.email) || "")}</button>
         </div>
       </header>
-      {msg && <p className={msg.ok ? "login-sent" : "login-err"} style={{ marginBottom: 12 }}>{msg.text}</p>}
+      {msg && <p className={msg.ok ? "login-sent" : "login-err"} style={{ marginBottom: 12 }} role={msg.ok ? "status" : "alert"}>{msg.text}</p>}
+      {ready.length > 0 && (
+        <div className="qx-ready" style={{ display: "flex", flexWrap: "wrap", gap: 8, marginBottom: 12 }}>
+          {ready.map(f => (
+            <a key={f.url} className="btn btn-ghost btn-sm" href={f.url} {...(QX_CAN_DOWNLOAD ? { download: f.filename } : { target: "_blank", rel: "noopener" })}>
+              {f.kind} ✓ {f.filename}
+            </a>
+          ))}
+        </div>
+      )}
       {!companySaved && <p className="login-err" style={{ marginBottom: 12 }}>{t("qx_company_required").replace("{c}", d.market)}</p>}
 
       <div className="qx-grid">
@@ -564,6 +615,7 @@ function QuoteSendPage({ q, cust, onClose }) {
           </div>
 
           <h2>{t("qx_currency")}</h2>
+          <label className="login-remember" style={{ margin: "0 0 8px" }}><input type="checkbox" checked={d.showUsd !== false} onChange={e => set("showUsd", e.target.checked)} /> {t("qx_show_usd")}</label>
           <div className="form-grid">
             <Field label={t("qx_base_ccy")}>
               <select className="select" value={d.baseCcy} onChange={e => setCcy("baseCcy", e.target.value)}>{ccys.map(c => <option key={c}>{c}</option>)}</select>
@@ -591,7 +643,7 @@ function QuoteSendPage({ q, cust, onClose }) {
                 <Field label="W×L"><div className="qx-static">{l.width}×{l.length}</div></Field>
                 <Field label="MOQ"><input className="input" type="number" value={l.qty} onChange={e => setLine(i, "qty", e.target.value)} /></Field>
                 <Field label={`${t("qx_unit_price")} (${d.quoteCcy}/m²)`}><input className="input" type="number" step="any" placeholder={qxFmt(rows[i].unit, 4)} value={l.price == null ? "" : l.price} onChange={e => setLine(i, "price", e.target.value === "" ? null : e.target.value)} /></Field>
-                <Field label="USD"><div className="qx-static">{qxFmt(rows[i].usd, 3)}</div></Field>
+                {d.showUsd !== false && <Field label="USD"><div className="qx-static">{qxFmt(rows[i].usd, 3)}</div></Field>}
               </div>
               <textarea className="input" rows="3" placeholder={t("qx_note")} value={l.note} onChange={e => setLine(i, "note", e.target.value)} />
             </div>
