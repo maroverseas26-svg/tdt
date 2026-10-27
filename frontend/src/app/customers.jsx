@@ -176,7 +176,7 @@ function CustomerList({ onOpen }) {
 
   return (
     <div className="page page-wide">
-      <header className="page-head">
+      <header className="page-head list-head">
         <div>
           <h1>{t("cu_title")}</h1>
           <p className="page-sub">{filtered.length} {t("customers")}</p>
@@ -211,36 +211,30 @@ function CustomerList({ onOpen }) {
             })} />}
           <button className="btn btn-ghost" onClick={() => setImporting(true)}><Icon d={ICONS.upload} size={15} /> {t("im_btn")}</button>
           <button className="btn btn-primary" onClick={() => setAdding(true)}><Icon d={ICONS.plus} size={15} /> {t("cu_add")}</button>
+          <MoreMenu items={[
+            legacyLead.length > 0 && canEdit && canEdit("customers") && { key: "lead", label: t("cu_lead_fix") + " (" + legacyLead.length + ")", title: t("cu_lead_fix_hint"), icon: ICONS.refresh, onClick: () => setFixLead(true) },
+            canDelete && filtered.length > 0 && { key: "delall", label: t("cu_delete_all") + " (" + filtered.length + ")", icon: ICONS.trash, danger: true, onClick: deleteAll },
+          ]} />
         </div>
       </header>
-      <div className="toolbar">
+      <div className="list-toolbar">
         <div className="search-box">
-          <Icon d={ICONS.search} size={16} />
+          <Icon d={ICONS.search} size={15} />
           <input value={q} onChange={e => setQ(e.target.value)} placeholder={t("cu_search")} />
         </div>
         {owners.length > 1 && <FilterSelect value={owner} onChange={setOwner} options={owners} allLabel={t("owner") + ": " + t("all")} />}
         <FilterSelect value={type} onChange={setType} options={types} allLabel={t("type") + ": " + t("all")} />
         <FilterSelect value={leadSrc} onChange={setLeadSrc} options={leadSources} allLabel={t("cu_lead_source") + ": " + t("all")} />
-        {legacyLead.length > 0 && canEdit && canEdit("customers") && (
-          <button className="btn btn-ghost" onClick={() => setFixLead(true)} title={t("cu_lead_fix_hint")}>
-            <Icon d={ICONS.refresh} size={14} /> {t("cu_lead_fix")} ({legacyLead.length})
-          </button>
-        )}
         <FilterSelect value={funnel} onChange={setFunnel} options={CU.STAGES} allLabel={t("funnel") + ": " + t("all")} />
         <select className="select" value={has} onChange={e => setHas(e.target.value)}>
           <option value="">{t("cu_has")}: {t("all")}</option>
           <option value="projects">{t("cu_has_projects")}</option>
           <option value="po">{t("cu_has_po")}</option>
         </select>
+        <SortMenu columns={sortCols} sort={sort.sort} onSort={sort.onSort} />
         <button className={"btn btn-ghost" + (groupNC ? " btn-filter-active" : "")} onClick={() => { setGroupNC(v => !v); setPage(0); }}>
           <Icon d={ICONS.board} size={14} /> {t("nc_group_by")}
         </button>
-        <SortMenu columns={sortCols} sort={sort.sort} onSort={sort.onSort} />
-        {canDelete && filtered.length > 0 && (
-          <button className="btn btn-danger btn-sm" style={{ marginLeft: "auto" }} onClick={deleteAll}>
-            {t("cu_delete_all")} ({filtered.length})
-          </button>
-        )}
       </div>
       <div className="card table-card">
         <table className="table">

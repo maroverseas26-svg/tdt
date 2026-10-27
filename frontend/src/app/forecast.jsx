@@ -384,30 +384,38 @@ function SalesForecastPage() {
         .fc-pick-num{text-align:right;font-size:11.5px;color:#475569;white-space:nowrap}
         .fc-pick-bar{display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap;margin-top:12px;padding-top:12px;border-top:1px solid #eef1f4}
       `}</style>
-      <header className="page-head">
+      <header className="page-head list-head">
         <div>
           <h1>{t("fc_title")}</h1>
           <p className="page-sub">{t("fc_subtitle")}</p>
         </div>
         <div className="head-actions">
-          <select className="select" value={currency} onChange={e => setCurrency(e.target.value)}>
-            {Object.keys(FCC.CURRENCIES).map(c => <option key={c} value={c}>{c}</option>)}
-          </select>
-          {(isBoss || reps.length > 1) && (
-            <select className="select" value={rep} onChange={e => setRep(e.target.value)}>
-              <option value="">{t("fc_all_reps")}</option>
-              {reps.map(r => <option key={r} value={r}>{r}</option>)}
-            </select>
-          )}
-          <select className="select" value={statusF} onChange={e => setStatusF(e.target.value)}>
-            <option value="">{t("fc_status")}: {t("all")}</option>
-            {FCC.FORECAST_STATUSES.map(s => <option key={s} value={s}>{t("fc_status_" + s)}</option>)}
-          </select>
-          <SortMenu columns={fcSortCols} sort={fcSort.sort} onSort={fcSort.onSort} />
-          {canExport && canExport("forecast") && <button className="btn btn-ghost" onClick={exportForecast}><Icon d={ICONS.upload} size={15} /> Export CSV</button>}
-          <button className="btn btn-primary" onClick={() => setAddCust(true)}>+ {t("fc_add_cust")}</button>
+          {canExport && canExport("forecast") && <button className="btn btn-ghost" onClick={exportForecast}><Icon d={ICONS.download} size={15} /> Export CSV</button>}
+          <button className="btn btn-primary" onClick={() => setAddCust(true)}><Icon d={ICONS.plus} size={15} /> {t("fc_add_cust")}</button>
         </div>
       </header>
+      <div className="list-toolbar">
+        <div className="search-box">
+          <Icon d={ICONS.search} size={15} />
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder={t("fc_search_ph")} />
+        </div>
+        {(isBoss || reps.length > 1) && (
+          <select className="select" value={rep} onChange={e => setRep(e.target.value)}>
+            <option value="">{t("fc_all_reps")}</option>
+            {reps.map(r => <option key={r} value={r}>{r}</option>)}
+          </select>
+        )}
+        <select className="select" value={statusF} onChange={e => setStatusF(e.target.value)}>
+          <option value="">{t("fc_status")}: {t("all")}</option>
+          {FCC.FORECAST_STATUSES.map(s => <option key={s} value={s}>{t("fc_status_" + s)}</option>)}
+        </select>
+        <select className="select list-ccy" value={currency} onChange={e => setCurrency(e.target.value)}>
+          {Object.keys(FCC.CURRENCIES).map(c => <option key={c} value={c}>{c}</option>)}
+        </select>
+        <SortMenu columns={fcSortCols} sort={fcSort.sort} onSort={fcSort.onSort} />
+        {(search || fcCountries.length || rep) ? <button className="btn btn-ghost" onClick={() => { setSearch(""); setFcCountries([]); if (isBoss || isCountryMgr || reps.length > 1) setRep(""); }}>{t("fc_reset")}</button> : null}
+        <span className="list-toolbar-note">{skuCount} SKU · {compList.length} {t("fc_col_customer").toLowerCase()}</span>
+      </div>
 
       <div className="kpi-row kpi-row-4">
         <div className="kpi">
@@ -429,15 +437,6 @@ function SalesForecastPage() {
           <span className="kpi-value">{skuCount}</span>
           <span className="kpi-foot">{compList.length} {t("fc_col_customer").toLowerCase()}</span>
         </div>
-      </div>
-
-      <div className="filter-bar" style={{ display: "flex", gap: 10, alignItems: "center", margin: "0 0 12px" }}>
-        <div className="search-box search-box-sm" style={{ flex: "0 1 320px" }}>
-          <Icon d={ICONS.search} size={15} />
-          <input value={search} onChange={e => setSearch(e.target.value)} placeholder={t("fc_search_ph")} />
-        </div>
-        {(search || fcCountries.length || rep) ? <button className="btn btn-ghost btn-sm" onClick={() => { setSearch(""); setFcCountries([]); if (isBoss || isCountryMgr || reps.length > 1) setRep(""); }}>{t("fc_reset")}</button> : null}
-        <span className="dim" style={{ fontSize: 12 }}>{skuCount} SKU · {compList.length} {t("fc_col_customer").toLowerCase()}</span>
       </div>
 
       <div className="card table-card" style={{ padding: 0 }}>

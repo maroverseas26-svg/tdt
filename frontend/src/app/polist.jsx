@@ -412,111 +412,107 @@ function POListPage({ openCustomer, selected, setSelected, presetFromQuote, clea
 
   return (
     <div className="page">
-      <div className="month-range-bar">
-        {canExport && canExport("polist") && (
-          <div style={{ marginLeft: "auto" }}>
-            <ExportMenu name="po_list"
-              all={scopePOs} filtered={list} page={visible}
-              map={p => {
-                const c = customers.find(x => x.id === p.customerId) || {};
-                const nr = poNR(p);
-                const _codes = (p.items && p.items.length) ? p.items.map(it => it.structureCode || it.sku).filter(Boolean) : [];
-                const _area = (p.sqm && p.qty) ? p.sqm / p.qty : ((p.width || 0) / 1000) * (p.length || 0);
-                const _unit = (_area && p.qty && p.amountVnd) ? Math.round(p.amountVnd / (_area * p.qty)) : "";
-                return {
-                  po_number: p.poNumber || p.id,
-                  customer: c.name,
-                  customer_short: c.shortName,
-                  business_id: c.bizId,
-                  country: c.country,
-                  pic: p.pic,
-                  group: p.group,
-                  sales_date: p.date,
-                  po_date: p.poDate,
-                  product: p.commercial,
-                  structure_code: _codes.length ? _codes.join(" | ") : (p.structureCode || ""),
-                  grade: p.grade,
-                  width_mm: p.width,
-                  length_m: p.length,
-                  qty: p.qty,
-                  unit: p.unit,
-                  unit_price_sqm: _unit,
-                  roll_price: (_unit && _area) ? Math.round(_unit * _area) : "",
-                  amount_vnd: p.amountVnd,
-                  vnd_per_roll: p.qty ? Math.round(p.amountVnd / p.qty) : "",
-                  vnd_per_sqm: p.sqm ? Math.round(p.amountVnd / p.sqm) : "",
-                  sqm: p.sqm,
-                  usd: p.amountVnd ? Math.round(p.amountVnd / PO.USD_RATE * 100) / 100 : "",
-                  inv_no: p.invNo,
-                  edp_code: p.edpCode,
-                  new_repeat: nr.newRepeat,
-                  order_count: nr.orderCount,
-                  order_type: p.orderType,
-                  quote_ref: p.quoteRef,
-                  warning: p.warning,
-                };
-              }} />
-          </div>
-        )}
-        <button className="btn btn-ghost" style={{ marginLeft: canExport && canExport("polist") ? "0" : "auto" }} onClick={() => setImporting(true)}>
-          <Icon d={ICONS.upload} size={15} /> {t("pol_import_excel")}
-        </button>
-      </div>
       {cmpStats && <DrCompareBar range={drR} metrics={[
         { label: t("pol_count"), cur: cmpStats.cur.n, prev: cmpStats.prev.n, fmt: v => PO.fmtNum(v) },
         { label: t("pol_total_amount"), cur: cmpStats.cur.amt, prev: cmpStats.prev.amt, fmt: v => moneyFull(v) },
         { label: t("pol_sqm"), cur: cmpStats.cur.sqm, prev: cmpStats.prev.sqm, fmt: v => PO.fmtNum(Math.round(v)) },
       ]} />}
-      <header className="page-head">
+      <header className="page-head list-head">
         <div>
           <h1>{t("pol_title")}</h1>
           <p className="page-sub">{wsCapped ? (PO.fmtNum(poCount) + " / " + PO.fmtNum(wsTotal)) : PO.fmtNum(poCount)} {t("pol_count")} · {PO.fmtNum(list.length)} {t("pol_lines")} · {money(totalAmount)}{searchingAll ? <span className="dim"> · {t("pol_search_all_time")}</span> : null}{wsLoading ? <span className="dim"> · {t("loading") || "…"}</span> : null}</p>
         </div>
         <div className="head-actions">
-          <div className="search-box search-box-sm">
-            <Icon d={ICONS.search} size={15} />
-            <input value={q} onChange={e => setQ(e.target.value)} placeholder={t("cu_company") + " / PO / Business ID…"} />
-          </div>
-          {(isBoss || isCountryMgr) && <FilterSelect value={pic} onChange={setPic} options={pics} allLabel={t("pol_pic") + ": " + t("all")} />}
-          <select className="select" value={currency} onChange={e => { curTouched.current = true; setCurrency(e.target.value); }}>
-            {Object.keys(PO.CURRENCIES).map(c => <option key={c} value={c}>{c}</option>)}
-          </select>
-          <select className="select" value={group} onChange={e => setGroup(e.target.value)}>
-            <option value="">{t("pol_group")}: {t("all")}</option>
-            {PO.GROUPS.map(g => <option key={g.id} value={g.id}>{g.label}</option>)}
-          </select>
-          <SortMenu columns={poSortCols} sort={sort.sort} onSort={sort.onSort} />
-          {isBoss && <button className="btn btn-ghost" disabled={!!fixing} title={t("pol_fix_prices_hint")}
-            onClick={async () => {
-              if (fixing) return;
-              if (!window.confirm(t("pol_fix_prices_confirm"))) return;
-              setFixing(t("loading"));
-              try {
-                const r = await backfillPOPrices(p => setFixing(p.phase === "read" ? PO.fmtNum(p.n) + "…" : PO.fmtNum(p.n) + "/" + PO.fmtNum(p.total)));
-                window.alert(t("pol_fix_prices_done").replace("{n}", PO.fmtNum(r.patched)).replace("{tot}", PO.fmtNum(r.scanned)));
-              } catch (e) { window.alert(String(e && e.message || e)); }
-              setFixing("");
-            }}><Icon d={ICONS.refresh || ICONS.upload} size={15} /> {fixing || t("pol_fix_prices")}</button>}
-          {isBoss && <button className="btn btn-ghost" disabled={!!fixing} title={t("pol_dedupe_hint")}
-            onClick={async () => {
-              if (fixing) return;
-              setFixing(t("loading"));
-              try {
-                // Dry run first: nothing is written until the exact counts are confirmed.
-                const dry = await cleanupPODuplicates(pg => setFixing(pg.phase === "read" ? PO.fmtNum(pg.n) + "…" : PO.fmtNum(pg.n) + "/" + PO.fmtNum(pg.total)), { dryRun: true });
-                setFixing("");
-                if (!dry.removed && !dry.fixed) { window.alert(t("pol_dedupe_none").replace("{tot}", PO.fmtNum(dry.scanned))); return; }
-                const msg = t("pol_dedupe_confirm").replace("{n}", PO.fmtNum(dry.removed)).replace("{f}", PO.fmtNum(dry.fixed)).replace("{tot}", PO.fmtNum(dry.scanned));
-                if (!window.confirm(msg)) return;
-                setFixing(t("loading"));
-                const r = await cleanupPODuplicates(pg => setFixing(pg.phase === "read" ? PO.fmtNum(pg.n) + "…" : PO.fmtNum(pg.n) + "/" + PO.fmtNum(pg.total)));
-                window.alert(t("pol_dedupe_done").replace("{n}", PO.fmtNum(r.removed)).replace("{f}", PO.fmtNum(r.fixed)).replace("{tot}", PO.fmtNum(r.scanned)));
-              } catch (e) { window.alert(String(e && e.message || e)); }
-              setFixing("");
-            }}><Icon d={ICONS.refresh} size={15} /> {t("pol_dedupe")}</button>}
+          {canExport && canExport("polist") && <ExportMenu name="po_list"
+            all={scopePOs} filtered={list} page={visible}
+            map={p => {
+              const c = customers.find(x => x.id === p.customerId) || {};
+              const nr = poNR(p);
+              const _codes = (p.items && p.items.length) ? p.items.map(it => it.structureCode || it.sku).filter(Boolean) : [];
+              const _area = (p.sqm && p.qty) ? p.sqm / p.qty : ((p.width || 0) / 1000) * (p.length || 0);
+              const _unit = (_area && p.qty && p.amountVnd) ? Math.round(p.amountVnd / (_area * p.qty)) : "";
+              return {
+                po_number: p.poNumber || p.id,
+                customer: c.name,
+                customer_short: c.shortName,
+                business_id: c.bizId,
+                country: c.country,
+                pic: p.pic,
+                group: p.group,
+                sales_date: p.date,
+                po_date: p.poDate,
+                product: p.commercial,
+                structure_code: _codes.length ? _codes.join(" | ") : (p.structureCode || ""),
+                grade: p.grade,
+                width_mm: p.width,
+                length_m: p.length,
+                qty: p.qty,
+                unit: p.unit,
+                unit_price_sqm: _unit,
+                roll_price: (_unit && _area) ? Math.round(_unit * _area) : "",
+                amount_vnd: p.amountVnd,
+                vnd_per_roll: p.qty ? Math.round(p.amountVnd / p.qty) : "",
+                vnd_per_sqm: p.sqm ? Math.round(p.amountVnd / p.sqm) : "",
+                sqm: p.sqm,
+                usd: p.amountVnd ? Math.round(p.amountVnd / PO.USD_RATE * 100) / 100 : "",
+                inv_no: p.invNo,
+                edp_code: p.edpCode,
+                new_repeat: nr.newRepeat,
+                order_count: nr.orderCount,
+                order_type: p.orderType,
+                quote_ref: p.quoteRef,
+                warning: p.warning,
+              };
+            }} />}
+          <button className="btn btn-ghost" onClick={() => setImporting(true)}><Icon d={ICONS.upload} size={15} /> {t("pol_import_excel")}</button>
           <button className="btn btn-primary" onClick={() => setCreating(true)}><Icon d={ICONS.plus} size={15} /> {t("pol_new")}</button>
+          {isBoss && <MoreMenu busy={fixing} items={[
+            { key: "fix", label: t("pol_fix_prices"), title: t("pol_fix_prices_hint"), icon: ICONS.refresh, disabled: !!fixing,
+              onClick: async () => {
+                if (fixing) return;
+                if (!window.confirm(t("pol_fix_prices_confirm"))) return;
+                setFixing(t("loading"));
+                try {
+                  const r = await backfillPOPrices(p => setFixing(p.phase === "read" ? PO.fmtNum(p.n) + "…" : PO.fmtNum(p.n) + "/" + PO.fmtNum(p.total)));
+                  window.alert(t("pol_fix_prices_done").replace("{n}", PO.fmtNum(r.patched)).replace("{tot}", PO.fmtNum(r.scanned)));
+                } catch (e) { window.alert(String(e && e.message || e)); }
+                setFixing("");
+              } },
+            { key: "dedupe", label: t("pol_dedupe"), title: t("pol_dedupe_hint"), icon: ICONS.refresh, disabled: !!fixing,
+              onClick: async () => {
+                if (fixing) return;
+                setFixing(t("loading"));
+                try {
+                  // Dry run first: nothing is written until the exact counts are confirmed.
+                  const dry = await cleanupPODuplicates(pg => setFixing(pg.phase === "read" ? PO.fmtNum(pg.n) + "…" : PO.fmtNum(pg.n) + "/" + PO.fmtNum(pg.total)), { dryRun: true });
+                  setFixing("");
+                  if (!dry.removed && !dry.fixed) { window.alert(t("pol_dedupe_none").replace("{tot}", PO.fmtNum(dry.scanned))); return; }
+                  const msg = t("pol_dedupe_confirm").replace("{n}", PO.fmtNum(dry.removed)).replace("{f}", PO.fmtNum(dry.fixed)).replace("{tot}", PO.fmtNum(dry.scanned));
+                  if (!window.confirm(msg)) return;
+                  setFixing(t("loading"));
+                  const r = await cleanupPODuplicates(pg => setFixing(pg.phase === "read" ? PO.fmtNum(pg.n) + "…" : PO.fmtNum(pg.n) + "/" + PO.fmtNum(pg.total)));
+                  window.alert(t("pol_dedupe_done").replace("{n}", PO.fmtNum(r.removed)).replace("{f}", PO.fmtNum(r.fixed)).replace("{tot}", PO.fmtNum(r.scanned)));
+                } catch (e) { window.alert(String(e && e.message || e)); }
+                setFixing("");
+              } },
+          ]} />}
         </div>
       </header>
+      <div className="list-toolbar">
+        <div className="search-box">
+          <Icon d={ICONS.search} size={15} />
+          <input value={q} onChange={e => setQ(e.target.value)} placeholder={t("cu_company") + " / PO / Business ID…"} />
+        </div>
+        {(isBoss || isCountryMgr) && <FilterSelect value={pic} onChange={setPic} options={pics} allLabel={t("pol_pic") + ": " + t("all")} />}
+        <select className="select" value={group} onChange={e => setGroup(e.target.value)}>
+          <option value="">{t("pol_group")}: {t("all")}</option>
+          {PO.GROUPS.map(g => <option key={g.id} value={g.id}>{g.label}</option>)}
+        </select>
+        <select className="select list-ccy" value={currency} onChange={e => { curTouched.current = true; setCurrency(e.target.value); }}>
+          {Object.keys(PO.CURRENCIES).map(c => <option key={c} value={c}>{c}</option>)}
+        </select>
+        <SortMenu columns={poSortCols} sort={sort.sort} onSort={sort.onSort} />
+      </div>
 
       <div className="kpi-row">
         <div className="kpi">

@@ -103,26 +103,26 @@ function PipelinesPage({ openCustomer, openProject }) {
 
   return (
     <div className="page page-wide">
-      <header className="page-head">
+      <header className="page-head list-head">
         <div>
           <h1>{t("pl_title")}</h1>
           <p className="page-sub">{view === "board" ? t("pl_drag") : list.length + " " + t("pr_title").toLowerCase()}</p>
         </div>
-        <div className="head-actions">
-          <div className="search-box search-box-sm">
-            <Icon d={ICONS.search} size={15} />
-            <input value={q} onChange={e => setQ(e.target.value)} placeholder={t("pr_name") + " / " + t("cu_company") + "…"} />
-          </div>
-          {isBoss && <FilterSelect value={owner} onChange={setOwner} options={owners} allLabel={t("pr_following") + ": " + t("all")} />}
-          <select className="select" value={currency} onChange={e => setCurrency(e.target.value)}>
-            {Object.keys(PL.CURRENCIES).map(c => <option key={c} value={c}>{c}</option>)}
-          </select>
-          <div className="seg">
-            <button className={view === "board" ? "on" : ""} onClick={() => setView("board")}><Icon d={ICONS.board} size={15} /> {t("pl_kanban")}</button>
-            <button className={view === "list" ? "on" : ""} onClick={() => setView("list")}><Icon d={ICONS.list} size={15} /> {t("pl_list")}</button>
-          </div>
-        </div>
       </header>
+      <div className="list-toolbar">
+        <div className="search-box">
+          <Icon d={ICONS.search} size={15} />
+          <input value={q} onChange={e => setQ(e.target.value)} placeholder={t("pr_name") + " / " + t("cu_company") + "…"} />
+        </div>
+        {isBoss && <FilterSelect value={owner} onChange={setOwner} options={owners} allLabel={t("pr_following") + ": " + t("all")} />}
+        <select className="select list-ccy" value={currency} onChange={e => setCurrency(e.target.value)}>
+          {Object.keys(PL.CURRENCIES).map(c => <option key={c} value={c}>{c}</option>)}
+        </select>
+        <div className="seg">
+          <button className={view === "board" ? "on" : ""} onClick={() => setView("board")}><Icon d={ICONS.board} size={15} /> {t("pl_kanban")}</button>
+          <button className={view === "list" ? "on" : ""} onClick={() => setView("list")}><Icon d={ICONS.list} size={15} /> {t("pl_list")}</button>
+        </div>
+      </div>
 
       {view === "board" ? (
         <div className="kanban">
