@@ -1443,6 +1443,9 @@ function AppProvider({ children, tweaks }) {
     // so the deletion propagates to every user and is never resurrected by a stale copy.
     const nextExtras = extras.map(c => s.has(c.id) ? { ...c, _deleted: true, _updated: NOW() } : c);
     setExtras(nextExtras); C.saveJSON(C.LS.extras, nextExtras);
+    // Persist the tombstones like any edit, or the delete stays in this browser only.
+    const gone = nextExtras.filter(c => s.has(c.id));
+    if (gone.length) syncRows("customers", gone);
     const seedIds = ids.filter(id => !inExtras.has(id));
     if (seedIds.length) setOverrides(o => { const n = { ...o }; seedIds.forEach(id => { n[id] = { ...(n[id] || {}), _deleted: true }; }); C.saveJSON(C.LS.custOverrides, n); return n; });
   };
