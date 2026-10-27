@@ -431,6 +431,10 @@ async function qxBuildPdf(node) {
 /* ---------- the page ---------- */
 function QuoteSendPage({ q, cust, onClose }) {
   const { t, user, isBoss, lvlOr, updateQuotation } = useApp();
+  // Who may change a country's seller block once it is saved: Admin level on Quotations (or an
+  // older account with delete rights on Quotations). The Worker applies the same rule
+  // (worker/src/rest.js, canFixQuoteCompany).
+  const canFixCompany = lvlOr("quotations", "admin", isBoss || ((user && user.deleteModules) || []).includes("quotations"));
   const docRef = React.useRef(null);
   const previewRef = React.useRef(null);
   const [zoom, setZoom] = React.useState(1);
@@ -545,7 +549,7 @@ function QuoteSendPage({ q, cust, onClose }) {
     setBusy("company"); setMsg(null);
     try {
       const fresh = await qxReadTemplates();
-      if (qxCompanyOf(fresh, m) && !isBoss) {
+      if (qxCompanyOf(fresh, m) && !canFixCompany) {
         setSaved(fresh); setEditingCompany(false);
         setMsg({ ok: false, text: t("qx_company_taken").replace("{c}", m) });
       } else {
@@ -626,7 +630,7 @@ function QuoteSendPage({ q, cust, onClose }) {
             <div className="modal-actions" style={{ marginTop: 8 }}>
               {companyOpen && <button className="btn btn-primary" disabled={!!busy} onClick={saveCompany}>{busy === "company" ? "…" : t("qx_company_save")}</button>}
               {editingCompany && <button className="btn btn-ghost" disabled={!!busy} onClick={cancelEditCompany}>{t("cancel")}</button>}
-              {companySaved && !editingCompany && isBoss && <button className="btn btn-ghost" onClick={startEditCompany}>{t("qx_company_edit")}</button>}
+              {companySaved && !editingCompany && canFixCompany && <button className="btn btn-ghost" onClick={startEditCompany}>{t("qx_company_edit")}</button>}
             </div>
           </div>
 
