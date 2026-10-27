@@ -137,24 +137,12 @@ function ProjectsPage({ openCustomer, newProjectFor, clearNewProjectFor, selecte
         { label: t("pr_title"), cur: list.length, prev: cmpPrev.n, fmt: v => PR.fmtNum(v) },
         { label: t("pr_value"), cur: list.reduce((s, p) => s + (p.value || 0), 0), prev: cmpPrev.amt, fmt: v => money(v) },
       ]} />}
-      <header className="page-head">
+      <header className="page-head list-head">
         <div>
           <h1>{t("pr_title")}</h1>
           <p className="page-sub">{list.length} {t("pr_title").toLowerCase()} · {money(totalValue)}</p>
         </div>
         <div className="head-actions">
-          <div className="search-box search-box-sm">
-            <Icon d={ICONS.search} size={15} />
-            <input value={q} onChange={e => setQ(e.target.value)} placeholder={t("cu_company") + " / Business ID…"} />
-          </div>
-          {isBoss && <FilterSelect value={owner} onChange={setOwner} options={owners} allLabel={t("owner") + ": " + t("all")} />}
-          <select className="select" value={currency} onChange={e => setCurrency(e.target.value)}>
-            {Object.keys(PR.CURRENCIES).map(c => <option key={c} value={c}>{c}</option>)}
-          </select>
-          <select className="select" value={stage} onChange={e => setStage(e.target.value)}>
-            <option value="">{t("pr_stage")}: {t("all")}</option>
-            {PR.PROJECT_STAGES.map(s => <option key={s} value={s}>{t("st_" + s)}</option>)}
-          </select>
           {canExport && canExport("projects") && <ExportMenu name="projects"
             all={scopeProjects} filtered={list}
             map={p => {
@@ -200,10 +188,24 @@ function ProjectsPage({ openCustomer, newProjectFor, clearNewProjectFor, selecte
               };
             }} />}
           <button className="btn btn-ghost" onClick={() => setImporting(true)}><Icon d={ICONS.upload} size={15} /> {t("pol_import_excel")}</button>
-          <SortMenu columns={projSortCols} sort={projSort.sort} onSort={projSort.onSort} />
           <button className="btn btn-primary" onClick={() => setCreating(true)}><Icon d={ICONS.plus} size={15} /> {t("pr_new")}</button>
         </div>
       </header>
+      <div className="list-toolbar">
+        <div className="search-box">
+          <Icon d={ICONS.search} size={15} />
+          <input value={q} onChange={e => setQ(e.target.value)} placeholder={t("cu_company") + " / Business ID…"} />
+        </div>
+        {isBoss && <FilterSelect value={owner} onChange={setOwner} options={owners} allLabel={t("owner") + ": " + t("all")} />}
+        <select className="select" value={stage} onChange={e => setStage(e.target.value)}>
+          <option value="">{t("pr_stage")}: {t("all")}</option>
+          {PR.PROJECT_STAGES.map(s => <option key={s} value={s}>{t("st_" + s)}</option>)}
+        </select>
+        <select className="select list-ccy" value={currency} onChange={e => setCurrency(e.target.value)}>
+          {Object.keys(PR.CURRENCIES).map(c => <option key={c} value={c}>{c}</option>)}
+        </select>
+        <SortMenu columns={projSortCols} sort={projSort.sort} onSort={projSort.onSort} />
+      </div>
 
       <div className="kpi-row kpi-row-projects">
         <div className="kpi">

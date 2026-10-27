@@ -1741,6 +1741,39 @@ function ExportMenu({ name, map, all, filtered, page }) {
     </div>
   );
 }
+// "More ⋯" menu at the right of a list page's header actions: holds the maintenance /
+// admin actions (items: { key, label, icon, onClick, title, disabled, danger }; falsy
+// items are skipped). `busy` replaces the button label while one of them is running.
+function MoreMenu({ items, busy }) {
+  const { t } = useApp();
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  useEffect(() => {
+    if (!open) return;
+    const fn = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener("mousedown", fn);
+    return () => document.removeEventListener("mousedown", fn);
+  }, [open]);
+  const list = (items || []).filter(Boolean);
+  if (!list.length) return null;
+  return (
+    <div className="more-menu" ref={ref}>
+      <button className={"btn btn-ghost" + (busy ? " btn-filter-active" : "")} title={t("more_actions")} onClick={() => setOpen(o => !o)}>
+        <Icon d={ICONS.more} size={15} /> {busy || t("more")} <span className="export-caret">▾</span>
+      </button>
+      {open && (
+        <div className="more-pop">
+          {list.map(it => (
+            <button key={it.key} className={"more-opt" + (it.danger ? " danger" : "")} title={it.title} disabled={it.disabled}
+              onClick={() => { setOpen(false); it.onClick(); }}>
+              {it.icon && <Icon d={it.icon} size={14} />}<span>{it.label}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 function StageBadge({ stage, t }) {
   const color = C.STAGE_COLORS[stage] || "#94A3B8";
   return (
@@ -2507,6 +2540,9 @@ const ICONS = {
   sample: '<path d="M9 2v6.5L4.5 17a3 3 0 0 0 2.6 4.5h9.8a3 3 0 0 0 2.6-4.5L15 8.5V2"/><path d="M9 2h6"/><path d="M8 16h8"/>',
   quote: '<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M9 13h6M9 17h4"/>',
   refresh: '<path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/>',
+  download: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/>',
+  more: '<circle cx="5" cy="12" r="1.3"/><circle cx="12" cy="12" r="1.3"/><circle cx="19" cy="12" r="1.3"/>',
+  trash: '<path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>',
   alert: '<path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4"/><path d="M12 17h.01"/>',
   forecast: '<path d="M3 3v18h18"/><path d="M18.7 8 13 13.7l-4-4L3 16.3"/><path d="M16 8h4v4"/>',
 };
@@ -3076,4 +3112,4 @@ function GroupChevron({ open }) {
   return <span className={"grp-chevron" + (open ? " open" : "")} aria-hidden="true">▸</span>;
 }
 
-Object.assign(window, { catalogueFor, AppProvider, useApp, StageBadge, ProjStageBadge, GroupBadge, Avatar, OwnerChip, Modal, Field, FilterSelect, ProjectLinkField, Icon, ICONS, LoginScreen, ResetPasswordScreen, Shell, readPhoto, useRowSelection, SelectAllCheck, RowCheck, BulkBar, ImportDrop, ImportSheetPicker, GenericImportModal, ProductLineItems, LineItemsView, SkuInput, CodeCombo, StructCombo, lineItemTotals, lineTierQty, lineEffUnitPrice, lineValueEff, lineRollPrice, lineAreaPerRoll, lineUnitPrice, groupByCustomer, groupByCompany, useGroupToggle, GroupChevron, MembersAllowedControl, useSort, SortTh, SortMenu });
+Object.assign(window, { catalogueFor, AppProvider, useApp, StageBadge, ProjStageBadge, GroupBadge, Avatar, OwnerChip, Modal, Field, FilterSelect, MoreMenu, ProjectLinkField, Icon, ICONS, LoginScreen, ResetPasswordScreen, Shell, readPhoto, useRowSelection, SelectAllCheck, RowCheck, BulkBar, ImportDrop, ImportSheetPicker, GenericImportModal, ProductLineItems, LineItemsView, SkuInput, CodeCombo, StructCombo, lineItemTotals, lineTierQty, lineEffUnitPrice, lineValueEff, lineRollPrice, lineAreaPerRoll, lineUnitPrice, groupByCustomer, groupByCompany, useGroupToggle, GroupChevron, MembersAllowedControl, useSort, SortTh, SortMenu });

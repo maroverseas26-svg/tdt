@@ -104,20 +104,12 @@ function ProductsPage() {
 
   return (
     <div className="page">
-      <header className="page-head">
+      <header className="page-head list-head">
         <div>
           <h1>{t("pd_title")}</h1>
           <p className="page-sub">{list.length} {t("pd_count")}</p>
         </div>
         <div className="head-actions">
-          <div className="search-box search-box-sm">
-            <Icon d={ICONS.search} size={15} />
-            <input value={q} onChange={e => setQ(e.target.value)} placeholder={t("pd_search")} />
-          </div>
-          <select className="select" value={currency} onChange={e => pickCurrency(e.target.value)} title={t("qt_currency")}>
-            {Object.keys(PD.CURRENCIES).map(c => <option key={c} value={c}>{c}</option>)}
-          </select>
-          <button className="btn btn-ghost" onClick={() => setImporting(true)}><Icon d={ICONS.upload} size={15} /> {t("pd_import_excel")}</button>
           {canExport && canExport("products") && <ExportMenu name="products"
             all={products} filtered={list}
             map={p => {
@@ -140,10 +132,20 @@ function ProductsPage() {
                 currency: p.currency || "VND",
               };
             }} />}
-          <SortMenu columns={sortColumns} sort={sort.sort} onSort={sort.onSort} />
+          <button className="btn btn-ghost" onClick={() => setImporting(true)}><Icon d={ICONS.upload} size={15} /> {t("pd_import_excel")}</button>
           <button className="btn btn-primary" onClick={() => setEditing("new")}><Icon d={ICONS.plus} size={15} /> {t("pd_new")}</button>
         </div>
       </header>
+      <div className="list-toolbar">
+        <div className="search-box">
+          <Icon d={ICONS.search} size={15} />
+          <input value={q} onChange={e => setQ(e.target.value)} placeholder={t("pd_search")} />
+        </div>
+        <select className="select list-ccy" value={currency} onChange={e => pickCurrency(e.target.value)} title={t("qt_currency")}>
+          {Object.keys(PD.CURRENCIES).map(c => <option key={c} value={c}>{c}</option>)}
+        </select>
+        <SortMenu columns={sortColumns} sort={sort.sort} onSort={sort.onSort} />
+      </div>
 
       <div className="card table-card">
         <table className="table">
