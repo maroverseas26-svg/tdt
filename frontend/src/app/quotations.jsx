@@ -344,7 +344,7 @@ function QuoteItemRow({ item, onChange, onRemove, t, products: allProducts, coun
 }
 
 function QuotationFormModal({ onClose, presetCustomerId, presetProjectId, asPage, existing }) {
-  const { t, isBoss, assignablePics, repCountry, scopeCustomers, scopeProjects, addQuotation, updateQuotation, nextQuoteNo, currency, findOrCreateCustomer, user, products } = useApp();
+  const { t, isBoss, assignablePics, repCountry, scopeCustomers, scopeProjects, addQuotation, updateQuotation, nextQuoteNo, freshQuoteNo, currency, findOrCreateCustomer, user, products } = useApp();
   const today = new Date().toISOString().slice(0, 10);
   const validUntilDefault = (() => { const d = new Date(); d.setDate(d.getDate() + 30); return d.toISOString().slice(0, 10); })();
   // A new customer created from this form belongs to the market being worked in.
@@ -380,8 +380,16 @@ function QuotationFormModal({ onClose, presetCustomerId, presetProjectId, asPage
   const valid = ((f.customerId && f.customerId !== "__new__") || (f.customerId === "__new__" && f.newCustName.trim())) && f.items.some(it => (it.productId || it.productCode) && parseFloat(it.qty) > 0 && parseFloat(it.price) > 0);
   const total = f.items.reduce((s, it) => s + lineValueEff(it), 0);
 
-  const submit = () => {
-    if (!valid) return;
+  const [saving, setSaving] = useState(false);
+  const submit = async () => {
+    if (!valid || saving) return;
+    // A new quotation takes the next number that is free on the server, not only in this browser.
+    let quoteNo = null;
+    if (!existing) {
+      setSaving(true);
+      quoteNo = await freshQuoteNo().catch(() => null);
+      setSaving(false);
+    }
     let customerId = f.customerId;
     if (customerId === "__new__") {
       customerId = findOrCreateCustomer({ name: f.newCustName, country: f.newCustCountry, owner: user.salesCode || "" }, "quotation");
@@ -392,7 +400,7 @@ function QuotationFormModal({ onClose, presetCustomerId, presetProjectId, asPage
     if (existing) {
       updateQuotation(existing.id, { customerId, projectId: f.projectId, quoteDate: f.quoteDate, validUntil: f.validUntil, paymentTerms: f.paymentTerms, status: f.status, approvedBy: f.approvedBy, currency: f.currency, pic: f.pic, items: payloadItems });
     } else {
-      addQuotation({ ...rest, customerId, items: payloadItems });
+      addQuotation({ ...rest, ...(quoteNo ? { id: quoteNo } : {}), customerId, items: payloadItems });
     }
     onClose();
   };
@@ -468,7 +476,7 @@ function QuotationFormModal({ onClose, presetCustomerId, presetProjectId, asPage
       </div>
       <div className="modal-actions">
         <button className="btn btn-ghost" onClick={onClose}>{t("cancel")}</button>
-        <button className="btn btn-primary" disabled={!valid} onClick={submit}>{existing ? t("save") : t("qt_new")}</button>
+        <button className="btn btn-primary" disabled={!valid || saving} onClick={submit}>{saving ? "…" : existing ? t("save") : t("qt_new")}</button>
       </div>
     </QuoteFormShell>
   );

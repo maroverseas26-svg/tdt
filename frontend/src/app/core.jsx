@@ -253,6 +253,16 @@ function AppProvider({ children, tweaks }) {
     const next = (nums.length ? Math.max(...nums) : 0) + 1;
     return "QT-" + year + "-" + String(next).padStart(3, "0");
   };
+  // The next free number from the server's copy too: a browser open since the morning does not
+  // know the quotations others created since, and reusing a number overwrites their quotation.
+  const freshQuoteNo = async () => {
+    const year = new Date().getFullYear();
+    const r = await fetch(C.SB.url + "/quotations?select=id&id=like." + encodeURIComponent("QT-" + year + "-*"), { cache: "no-store" });
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    const server = (await r.json()).map(q => { const m = String(q.id || "").match(/QT-\d{4}-(\d+)/); return m ? +m[1] : 0; });
+    const local = +(nextQuoteNo().match(/-(\d+)$/) || [0, 1])[1] - 1;
+    return "QT-" + year + "-" + String(Math.max(local, ...server, 0) + 1).padStart(3, "0");
+  };
   const addQuotation = (data) => {
     const id = data.id || nextQuoteNo();
     const rec = {
@@ -904,8 +914,15 @@ function AppProvider({ children, tweaks }) {
     updateCustomer(id, { funnel: stage, status }, `Moved to ${stage}`);
   };
 
+  // Time-based, so no two browsers hand out the same id. The old "P-" + count + random scheme
+  // reused numbers and a new project silently overwrote an existing one.
+  const newProjectId = (i = 0) => {
+    let id;
+    do { id = "P-" + (Date.now() + i++).toString(36).toUpperCase(); } while (projects.some(p => p.id === id));
+    return id;
+  };
   const addProject = (p) => {
-    const id = "P-" + String(2600 + projects.length + 1 + Math.floor(Math.random() * 90)).padStart(4, "0");
+    const id = newProjectId();
     const proj = { ...p, id, createdAt: new Date().toISOString().slice(0, 10), _updated: NOW() };
     setProjects([proj, ...projects]);
     syncRows("projects", proj);
@@ -1215,14 +1232,13 @@ function AppProvider({ children, tweaks }) {
   // bulk import: Projects. items carry parsed numeric value/pricePerSqm (already currency-converted).
   const addProjectsBulk = (items) => {
     const r = _custResolver(null, "project-import");
-    const base = projects.length;
     const recs = items.map((it, i) => {
       const rawName = (it.customerName || "").trim();
       if (!rawName) return null;
       const cust = r.get(rawName, it.country, it.following, i);
       const me = user ? (user.salesCode || user.name) : "?";
       return {
-        id: "P-" + String(2600 + base + 1 + i + Math.floor(Math.random() * 90)).padStart(4, "0"),
+        id: newProjectId(i),
         customerId: cust.id, name: it.name || "(imported)", classification: it.classification || "New project",
         product: it.product || "", ink: it.ink || "Wax", width: it.width || 0, length: it.length || 0,
         qtyRolls: it.qtyRolls || 0, qtySqm: it.qtySqm || 0, pricePerSqm: it.pricePerSqm || 0, value: it.value || 0,
@@ -1799,7 +1815,7 @@ function AppProvider({ children, tweaks }) {
     currency, setCurrency, money,
     countryFilter, setCountryFilter, dateRange, setDateRange, dateRangeR, visibleCountries, productCountry, kpiPics, picFilterCodes, backfillPOPrices, repairPOSqm, cleanupPODuplicates,
     samples: samplesLive, addSample, updateSample, samplesFor,
-    quotations: quotationsLive, addQuotation, updateQuotation, quotationsFor, nextQuoteNo,
+    quotations: quotationsLive, addQuotation, updateQuotation, quotationsFor, nextQuoteNo, freshQuoteNo,
     reorderRows, setReorderAction,
     forecast: forecastLive, upsertForecast, deleteForecast, forecastFor, scopeForecast,
     skuForecast, saveSkuCell, saveSkuMeta, deleteSkuRow,
