@@ -1705,6 +1705,9 @@ function Root(){
   const [newProjFor, setNewProjFor] = React.useState(null);
   const [poFromQuote, setPoFromQuote] = React.useState(null);
   const [poDates, setPoDates] = React.useState(null);
+  // Bumped on every sidebar click: the page remounts, so it always opens on its home view
+  // (list, no detail open), even when it is the page already shown.
+  const [navSeq, setNavSeq] = React.useState(0);
 
   React.useEffect(() => {
     if (user && !canSee(page)) {
@@ -1727,7 +1730,8 @@ function Root(){
   const openPOPeriod = (range) => { setPoDates(range); setSelPO(null); setPage("polist"); };
 
   return (
-    <Shell page={page} setPage={(p) => { setPage(p); if (p !== "customers") setSelCust(null); if (p !== "projects") setSelProj(null); if (p !== "polist") setSelPO(null); if (p !== "quotations") setSelQuote(null); }}>
+    <Shell page={page} setPage={(p) => { setPage(p); setNavSeq(n => n + 1); setSelCust(null); setSelProj(null); setSelPO(null); setSelQuote(null); setNewProjFor(null); setPoFromQuote(null); setPoDates(null); }}>
+      <React.Fragment key={navSeq}>
       {page === "overview" && <OverviewPage goCustomer={openCustomer} goProjects={() => setPage("projects")} goProject={openProject} goReorder={() => setPage("retention")} goPOPeriod={openPOPeriod} />}
       {page === "customers" && <CustomersPage selected={selCust} setSelected={setSelCust} openNewProject={openNewProject} openProject={openProject} openPO={openPO} openQuote={openQuote} />}
       {page === "pipelines" && <PipelinesPage openCustomer={openCustomer} openProject={openProject} />}
@@ -1740,6 +1744,7 @@ function Root(){
       {page === "forecast" && <SalesForecastPage />}
       {page === "retention" && <RetentionPage openCustomer={openCustomer} />}
       {page === "admin" && <AdminPage />}
+      </React.Fragment>
     </Shell>
   );
 }
