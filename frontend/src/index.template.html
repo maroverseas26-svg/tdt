@@ -1241,6 +1241,19 @@ i.tg-dot.tg-ok{background:#16A34A}i.tg-dot.tg-mid{background:#D97706}i.tg-dot.tg
   .topbar{padding:8px 14px}
   .topbar-logo{visibility:visible}
   .top-user-name{display:none}
+  /* compact topbar: icon-only pills, the date button keeps one line and ellipsizes */
+  .topbar{gap:8px}
+  .topbar .menu-toggle{margin-right:0}
+  .topbar-logo{flex:0 0 auto;margin-right:0}
+  .topbar-left{flex:1 1 auto;min-width:0;margin-left:0}
+  .topbar-right{gap:6px;flex:0 0 auto}
+  .topbar .top-pill{padding:5px 8px;gap:4px}
+  .topbar .top-pill-label,.topbar .user-caret{display:none}
+  .topbar .top-user{padding:3px}
+  .topbar .dr-wrap{min-width:0;max-width:100%}
+  .topbar .dr-btn{min-width:0;max-width:100%;padding:7px 10px;gap:6px}
+  .topbar .dr-btn .dr-cap{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+  .topbar .dr-btn small{display:none}
   .mobile-nav{display:none}
   .table-card{overflow-x:auto}
   .table{min-width:560px}

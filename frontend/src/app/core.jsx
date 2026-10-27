@@ -2772,8 +2772,8 @@ function CountryDropdown() {
   const opts = ["All", ...visibleCountries];
   return (
     <div className="dropdown" onClick={e => e.stopPropagation()}>
-      <button className="top-pill" onClick={() => setOpen(o => !o)} title={t("all_countries")} style={countryFilter !== "All" ? { borderColor: "var(--teal)", color: "var(--teal-dark)" } : undefined}>
-        <Icon d='<path d="M12 21s-7-5.5-7-11a7 7 0 0 1 14 0c0 5.5-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/>' size={15} /> {label} <span className="user-caret">▾</span>
+      <button className="top-pill" onClick={() => setOpen(o => !o)} title={label} style={countryFilter !== "All" ? { borderColor: "var(--teal)", color: "var(--teal-dark)" } : undefined}>
+        <Icon d='<path d="M12 21s-7-5.5-7-11a7 7 0 0 1 14 0c0 5.5-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/>' size={15} /> <span className="top-pill-label">{label}</span> <span className="user-caret">▾</span>
       </button>
       {open && (
         <div className="dropdown-menu">
@@ -2799,8 +2799,8 @@ function LangDropdown() {
   }, [open]);
   return (
     <div className="dropdown" onClick={e => e.stopPropagation()}>
-      <button className="top-pill" onClick={() => setOpen(o => !o)}>
-        <Icon d={ICONS.globe} size={15} /> {lang.toUpperCase()} <span className="user-caret">▾</span>
+      <button className="top-pill" onClick={() => setOpen(o => !o)} title={lang.toUpperCase()}>
+        <Icon d={ICONS.globe} size={15} /> <span className="top-pill-label">{lang.toUpperCase()}</span> <span className="user-caret">▾</span>
       </button>
       {open && (
         <div className="dropdown-menu">
