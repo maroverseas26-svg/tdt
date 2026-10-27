@@ -157,64 +157,68 @@ function TargetPage() {
 
   return (
     <div className="page page-wide">
-      <header className="page-head">
+      <header className="page-head list-head">
         <div>
           <h1>{t("tg_title")}</h1>
-        </div>
-        <div className="head-actions">
-          <select className="select" value={currency} onChange={e => setCurrency(e.target.value)} title={t("tg_currency")}>
-            {Object.keys(TG.CURRENCIES).map(c => <option key={c} value={c}>{c}</option>)}
-          </select>
-          <div className="seg">
+          <div className="seg list-head-seg">
             <button className={mode === "input" ? "on" : ""} onClick={() => setMode("input")}>{t("tg_mode_input")}</button>
             <button className={mode === "bycust" ? "on" : ""} onClick={() => setMode("bycust")}>{t("tg_mode_bycust")}</button>
             <button className={mode === "tracking" ? "on" : ""} onClick={() => setMode("tracking")}>{t("tg_mode_track")}</button>
           </div>
-          {mode === "tracking" && (
-            <select className="select" value={selMonth} onChange={e => setSelMonth(Number(e.target.value))}>
-              {TG_MONTHS.map((m, i) => <option key={i} value={i}>{m} {year}</option>)}
-            </select>
-          )}
-          <select className="select" value={year} onChange={e => setYear(e.target.value)}>
-            {years.map(y => <option key={y} value={y}>{t("tg_year")}: {y}</option>)}
-          </select>
-          <div className="export-menu">
-            <button className={"btn btn-ghost" + ((tgPic || tgGroup) ? " btn-filter-active" : "")} onClick={() => setFiltOpen(v => !v)}>
-              {t("tg_filters")} <span className="export-caret">▾</span>
-            </button>
-            {filtOpen && (
-              <div className="export-pop tg-filter-pop" onMouseLeave={() => setFiltOpen(false)}>
-                {(isBoss || kpiCountryScope) && (
-                  <label className="tg-filt-row"><span>{t("tg_pic")}</span>
-                    <select className="select" value={tgPic} onChange={e => setTgPic(e.target.value)}>
-                      <option value="">{t("all")}</option>
-                      {[...new Set(kpiUsers.filter(u => allowCountry(repCountry(kpiPic(u)))).map(kpiPic))].sort().map(p => <option key={p} value={p}>{p}</option>)}
-                    </select></label>
-                )}
-                <label className="tg-filt-row"><span>{t("tg_cust_type_group")}</span>
-                  <select className="select" value={tgGroup} onChange={e => setTgGroup(e.target.value)}>
-                    <option value="">{t("all")}</option>
-                    {TG.GROUPS.map(g => <option key={g.id} value={g.id}>{g.label}</option>)}
-                  </select></label>
-                <label className="tg-filt-row"><span>{t("tg_currency")}</span>
-                  <select className="select" value={currency} onChange={e => setCurrency(e.target.value)}>
-                    {Object.keys(TG.CURRENCIES).map(c => <option key={c} value={c}>{c}</option>)}
-                  </select></label>
-              </div>
-            )}
-          </div>
-          {isBoss && hiddenReps.size > 0 && <button className="btn btn-ghost" onClick={restoreReps}>↺ {t("tg_show_hidden").replace("{n}", hiddenReps.size)}</button>}
-          <SortMenu columns={tgSortCols} sort={tgSort.sort} onSort={tgSort.onSort} />
+        </div>
+        <div className="head-actions">
           {isBoss && <button className="btn btn-ghost" onClick={() => setImporting(true)}><Icon d={ICONS.upload} size={15} /> {t("tg_import")}</button>}
           <button className="btn btn-ghost" onClick={exportTargets}><Icon d={ICONS.download} size={15} /> {t("tg_export")}</button>
-          {isBoss && (yearTargets && Object.keys(yearTargets).length > 0 || (yearGroups && Object.keys(yearGroups).length > 0)) && (
-            <button className="btn btn-danger btn-ghost" onClick={() => crmConfirm(t("tg_delete_confirm").replace("{y}", year), () => {
-              const nt = { ...targets }; delete nt[year]; setTargets(nt);
-              const ng = { ...targetGroups }; delete ng[year]; setTargetGroups(ng);
-            })}><Icon d={ICONS.alert} size={15} /> {t("tg_delete")}</button>
-          )}
+          {isBoss && <MoreMenu items={[
+            (yearTargets && Object.keys(yearTargets).length > 0 || (yearGroups && Object.keys(yearGroups).length > 0)) && {
+              key: "del", label: t("tg_delete"), icon: ICONS.alert, danger: true,
+              onClick: () => crmConfirm(t("tg_delete_confirm").replace("{y}", year), () => {
+                const nt = { ...targets }; delete nt[year]; setTargets(nt);
+                const ng = { ...targetGroups }; delete ng[year]; setTargetGroups(ng);
+              }) },
+          ]} />}
         </div>
       </header>
+      <div className="list-toolbar">
+        <select className="select" value={year} onChange={e => setYear(e.target.value)}>
+          {years.map(y => <option key={y} value={y}>{t("tg_year")}: {y}</option>)}
+        </select>
+        {mode === "tracking" && (
+          <select className="select" value={selMonth} onChange={e => setSelMonth(Number(e.target.value))}>
+            {TG_MONTHS.map((m, i) => <option key={i} value={i}>{m} {year}</option>)}
+          </select>
+        )}
+        <select className="select list-ccy" value={currency} onChange={e => setCurrency(e.target.value)} title={t("tg_currency")}>
+          {Object.keys(TG.CURRENCIES).map(c => <option key={c} value={c}>{c}</option>)}
+        </select>
+        <div className="export-menu">
+          <button className={"btn btn-ghost" + ((tgPic || tgGroup) ? " btn-filter-active" : "")} onClick={() => setFiltOpen(v => !v)}>
+            {t("tg_filters")} <span className="export-caret">▾</span>
+          </button>
+          {filtOpen && (
+            <div className="export-pop tg-filter-pop" onMouseLeave={() => setFiltOpen(false)}>
+              {(isBoss || kpiCountryScope) && (
+                <label className="tg-filt-row"><span>{t("tg_pic")}</span>
+                  <select className="select" value={tgPic} onChange={e => setTgPic(e.target.value)}>
+                    <option value="">{t("all")}</option>
+                    {[...new Set(kpiUsers.filter(u => allowCountry(repCountry(kpiPic(u)))).map(kpiPic))].sort().map(p => <option key={p} value={p}>{p}</option>)}
+                  </select></label>
+              )}
+              <label className="tg-filt-row"><span>{t("tg_cust_type_group")}</span>
+                <select className="select" value={tgGroup} onChange={e => setTgGroup(e.target.value)}>
+                  <option value="">{t("all")}</option>
+                  {TG.GROUPS.map(g => <option key={g.id} value={g.id}>{g.label}</option>)}
+                </select></label>
+              <label className="tg-filt-row"><span>{t("tg_currency")}</span>
+                <select className="select" value={currency} onChange={e => setCurrency(e.target.value)}>
+                  {Object.keys(TG.CURRENCIES).map(c => <option key={c} value={c}>{c}</option>)}
+                </select></label>
+            </div>
+          )}
+        </div>
+        <SortMenu columns={tgSortCols} sort={tgSort.sort} onSort={tgSort.onSort} />
+        {isBoss && hiddenReps.size > 0 && <button className="btn btn-ghost" onClick={restoreReps}>↺ {t("tg_show_hidden").replace("{n}", hiddenReps.size)}</button>}
+      </div>
 
       {mode === "input" && <TgInputGrouped t={t} year={year} reps={sortedReps} yearGroups={yearGroups} setTargetGroup={setTargetGroup} isBoss={isBoss} canEdit={canEditKPI} repCountry={repCountry} groupFilter={tgGroup} cur={currency} onRemoveRep={removeRep} onMoveRep={moveRepCountry} />}
       {mode === "bycust" && <TgByCustomer t={t} year={year} canEdit={canEditKPI} reps={sortedReps} custById={tcCustById} picFilter={tgPic} importing={importing} setImporting={setImporting} />}

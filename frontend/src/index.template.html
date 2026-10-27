@@ -548,7 +548,7 @@ textarea.input{resize:vertical}
 .list-head{align-items:center;flex-wrap:nowrap;margin-bottom:14px}
 .list-head > div:first-child{min-width:0}
 .list-head .head-actions{flex:0 0 auto;flex-wrap:nowrap}
-.list-head .btn,.list-toolbar .btn,.list-toolbar .select,.list-toolbar .search-box,.list-toolbar .seg{height:36px;box-sizing:border-box}
+.list-head .btn,.list-toolbar .btn,.list-toolbar > .select,.list-toolbar .search-box,.list-toolbar .seg,.list-head-seg{height:36px;box-sizing:border-box}
 .list-head .btn,.list-toolbar .btn{white-space:nowrap;padding:0 14px;font-size:13px;justify-content:center}
 .list-toolbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:14px}
 .list-toolbar > *{flex:0 0 auto;min-width:0}
@@ -556,9 +556,12 @@ textarea.input{resize:vertical}
 .list-toolbar .search-box{flex:1 1 210px;max-width:300px;min-width:200px;padding:0 11px}
 .list-toolbar .search-box input{padding:0;height:100%;min-width:0;text-overflow:ellipsis}
 /* field-sizing: the select is as wide as the chosen option, not the longest one (falls back to the native width) */
-.list-toolbar .select{field-sizing:content;max-width:210px;padding:0 8px 0 10px;text-overflow:ellipsis;white-space:nowrap;overflow:hidden}
-.list-toolbar .select.list-ccy{max-width:90px}
-.list-toolbar .seg button{height:100%;padding:0 12px;white-space:nowrap}
+.list-toolbar > .select{field-sizing:content;max-width:210px;padding:0 8px 0 10px;text-overflow:ellipsis;white-space:nowrap;overflow:hidden}
+.list-toolbar > .select.list-ccy{max-width:90px}
+.list-toolbar .seg button,.list-head-seg button{height:100%;padding:0 12px;white-space:nowrap}
+.list-head-seg{display:inline-flex;margin-top:10px}
+.list-toolbar .export-pop{left:0;right:auto}
+.list-toolbar .link-btn{white-space:nowrap;padding:0 4px}
 .list-toolbar .sort-menu{display:flex}
 .list-toolbar-note{font-size:12px;color:var(--faint);white-space:nowrap}
 .more-menu{position:relative;display:inline-block}
@@ -579,8 +582,12 @@ textarea.input{resize:vertical}
   .list-head .head-actions .export-menu,.list-head .head-actions .more-menu{display:flex}
   .list-head .head-actions .btn{flex:1 1 auto;padding:0 10px}
   .list-toolbar .search-box{flex:1 1 100%;max-width:none;min-width:0}
-  .list-toolbar .select{flex:1 1 calc(50% - 4px);max-width:none}
-  .list-toolbar .select.list-ccy{flex:0 0 86px}
+  .list-toolbar > .select{flex:1 1 calc(50% - 4px);max-width:none}
+  .list-toolbar > .select.list-ccy{flex:0 0 86px}
+  .list-toolbar .seg{flex:1 1 100%}
+  .list-toolbar .seg button{flex:1 1 auto;justify-content:center;padding:0 6px}
+  .list-head-seg{display:flex;height:auto}
+  .list-head-seg button{flex:1 1 auto;justify-content:center;min-height:34px}
 }
 
 /* ---------- table ---------- */

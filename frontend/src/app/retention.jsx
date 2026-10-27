@@ -310,9 +310,6 @@ function RetentionPage({ openCustomer }) {
   const toggleRow = (id) => setExpanded(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
   const resetAll = () => { setQ(""); setHealth(""); setPicF(""); };
 
-  const activeTags = [];
-  if (picF) activeTags.push({ label: "PIC: " + picF, clear: () => setPicF("") });
-
   const counts = { green: 0, yellow: 0, red: 0 };
   scoped.forEach(r => { counts[r.health] = (counts[r.health] || 0) + 1; });
 
@@ -372,18 +369,32 @@ function RetentionPage({ openCustomer }) {
 
   return (
     <div className="page page-wide" data-screen-label="Retention">
-      <header className="page-head">
+      <header className="page-head list-head">
         <div>
           <h1>{t("ret_title")}</h1>
           <p className="page-sub">{t("ret_subtitle")}</p>
         </div>
-        <div className="head-actions">
-          <select className="select" value={currency} onChange={e => setCurrency(e.target.value)}>
-            {Object.keys(RT.CURRENCIES).map(c => <option key={c} value={c}>{c}</option>)}
-          </select>
-          <SortMenu columns={retSortCols} sort={retSort.sort} onSort={retSort.onSort} />
-        </div>
       </header>
+      <div className="list-toolbar">
+        <div className="search-box">
+          <Icon d={ICONS.search} size={15} />
+          <input value={q} onChange={e => setQ(e.target.value)} placeholder={t("ret_search_placeholder")} />
+        </div>
+        <select className="select" value={picF} onChange={e => setPicF(e.target.value)} title={t("tg_pic")}>
+          <option value="">{t("fc_all_reps")}</option>
+          {allPics.map(p => <option key={p} value={p}>{p}</option>)}
+        </select>
+        <div className="seg">
+          {riskOpts.map(o => (
+            <button key={o.k} className={health === o.k ? "on" : ""} onClick={() => setHealth(o.k)}>{o.l}</button>
+          ))}
+        </div>
+        <select className="select list-ccy" value={currency} onChange={e => setCurrency(e.target.value)}>
+          {Object.keys(RT.CURRENCIES).map(c => <option key={c} value={c}>{c}</option>)}
+        </select>
+        <SortMenu columns={retSortCols} sort={retSort.sort} onSort={retSort.onSort} />
+        <button className="link-btn" onClick={resetAll}>{t("ret_reset_all")}</button>
+      </div>
 
       <div className="kpi-row kpi-row-4">
         <RetentionKpi label={t("ret_kpi_total")} value={scoped.length} active={health === ""}
@@ -396,40 +407,6 @@ function RetentionPage({ openCustomer }) {
           onClick={() => setHealth(health === "red" ? "" : "red")} sub={periodAgg.red} money={money} />
       </div>
 
-      {/* ── Filter bar (template layout: search + risk · since range + PIC + tags + reset) ── */}
-      <div className="card ret-filter-card">
-        <div className="ret-filter-row" style={{ alignItems: "center" }}>
-          <div className="search-box search-box-sm" style={{ flex: "1 1 220px" }}>
-            <Icon d={ICONS.search} size={15} />
-            <input value={q} onChange={e => setQ(e.target.value)} placeholder={t("ret_search_placeholder")} />
-          </div>
-          <div className="ret-risk-btns">
-            {riskOpts.map(o => (
-              <button key={o.k} className={"chip" + (health === o.k ? " on" : "")} onClick={() => setHealth(o.k)}>{o.l}</button>
-            ))}
-          </div>
-        </div>
-        <div className="ret-filter-row">
-          <div>
-            <div className="ret-filter-label">
-              <Icon d='<path d="M16 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0zM12 14a7 7 0 0 0-7 7h14a7 7 0 0 0-7-7z"/>' size={12} />
-              {t("tg_pic")}
-            </div>
-            <select className="select" value={picF} onChange={e => setPicF(e.target.value)}>
-              <option value="">{t("fc_all_reps")}</option>
-              {allPics.map(p => <option key={p} value={p}>{p}</option>)}
-            </select>
-          </div>
-          {activeTags.length > 0 && (
-            <div className="ret-tags">
-              {activeTags.map((tag, i) => (
-                <span key={i} className="ret-active-tag">{tag.label}<button onClick={tag.clear}>×</button></span>
-              ))}
-            </div>
-          )}
-          <button className="link-btn ret-reset" onClick={resetAll}>{t("ret_reset_all")}</button>
-        </div>
-      </div>
       {cmpStats && <DrCompareBar range={drR} metrics={[
         { label: t("ret_kpi_total"), cur: cmpStats.cur.n, prev: cmpStats.prev.n, fmt: v => RT.fmtNum(v) },
         { label: t("ret_total_po"), cur: cmpStats.cur.amt, prev: cmpStats.prev.amt, fmt: v => RT.fmtMoneyFull(v, currency) },
