@@ -26,6 +26,7 @@ function tgPct(r) { return r == null ? "—" : Math.round(r * 100) + "%"; }
 
 function TargetPage() {
   const { t, isBoss, isCountryMgr, canEdit, assignableCodes, user, users, targets, setTarget, setTargets, targetGroups, setTargetGroup, setTargetGroups, repCountry, pos, currency, setCurrency, updateUser, scopeCustomers, customers, lvlOr } = useApp();
+  const tcScopeIds = React.useMemo(() => new Set((scopeCustomers || []).map(c => c.id)), [scopeCustomers]);
   const tcCustById = React.useMemo(() => { const m = {}; [...(customers || []), ...(scopeCustomers || [])].forEach(c => { if (c && c.id) m[c.id] = c; }); return m; }, [customers, scopeCustomers]);
   // KPI input is allowed for BOD/Admin (isBoss) OR anyone explicitly granted edit
   // rights on the Target module in Permissions — so a titled "Admin" like Thuy who
@@ -87,11 +88,12 @@ function TargetPage() {
   const registeredCodes = new Set(kpiUsers.map(kpiPic).filter(Boolean));
   // Who sees a whole COUNTRY's reps in Targets (applies to BOTH the Input and the
   // Tracking tab, since they share this list): BOD/Admin see everyone; a country
-  // manager or anyone granted edit rights on the Target module sees every rep in the
-  // KPI country(ies) tied to their account — so a Vietnam-permitted user manages and
-  // tracks Vietnam. Plain sales reps keep just their own assignable set.
+  // manager (scope country) sees every rep in the KPI country(ies) tied to their account.
+  // Sales accounts (scope own) keep just their own assignable set.
   const myKpiCountries = user ? (TG.kpiCountryOf(user) ? [TG.kpiCountryOf(user)] : []) : [];
-  const kpiCountryScope = !isBoss && (isCountryMgr || !!(canEdit && canEdit("target")));
+  // Edit rights no longer widen the list: a sales account (scope own) sees its own row(s)
+  // only, whatever its level on Targets.
+  const kpiCountryScope = !isBoss && isCountryMgr;
   const baseReps = isBoss
     ? [...registeredCodes].sort()
     : (kpiCountryScope
@@ -170,7 +172,7 @@ function TargetPage() {
         </div>
         <div className="head-actions">
           {lvlOr("target", "admin", isBoss) && <button className="btn btn-ghost" onClick={() => setImporting(true)}><Icon d={ICONS.upload} size={15} /> {t("tg_import")}</button>}
-          <button className="btn btn-ghost" onClick={exportTargets}><Icon d={ICONS.download} size={15} /> {t("tg_export")}</button>
+          {lvlOr("target", "view", true) && <button className="btn btn-ghost" onClick={exportTargets}><Icon d={ICONS.download} size={15} /> {t("tg_export")}</button>}
           {lvlOr("target", "admin", isBoss) && <MoreMenu items={[
             (yearTargets && Object.keys(yearTargets).length > 0 || (yearGroups && Object.keys(yearGroups).length > 0)) && {
               key: "del", label: t("tg_delete"), icon: ICONS.alert, danger: true,
@@ -223,15 +225,8 @@ function TargetPage() {
       </div>
 
       {mode === "input" && <TgInputGrouped t={t} year={year} reps={sortedReps} yearGroups={yearGroups} setTargetGroup={setTargetGroup} isBoss={isBoss} canEdit={canEditKPI} canDel={canDelKPI} repCountry={repCountry} groupFilter={tgGroup} cur={currency} onRemoveRep={removeRep} onMoveRep={moveRepCountry} />}
-      {mode === "bycust" && <TgByCustomer t={t} year={year} canEdit={canEditKPI} canDel={canDelKPI} reps={sortedReps} custById={tcCustById} picFilter={tgPic} importing={importing} setImporting={setImporting} />}
+      {mode === "bycust" && <TgByCustomer t={t} year={year} canEdit={canEditKPI} canDel={canDelKPI} reps={sortedReps} limitToReps={!isBoss} scopeIds={tcScopeIds} custById={tcCustById} picFilter={tgPic} importing={importing} setImporting={setImporting} />}
       {mode === "tracking" && <TgTracking t={t} year={year} selMonth={selMonth} reps={sortedReps} yearGroups={yearGroups} actualGroup={actualGroup} aggOK={!!tgAggRows} pos={pos} repCountry={repCountry} groupFilter={tgGroup} cur={currency} isBoss={isBoss} onMoveRep={moveRepCountry} />}
-
-      {mode === "input" && (
-        <div className="note-card card">
-          <strong>{t("tg_currency_notice_title")}</strong>
-          <p style={{ margin: "4px 0 0" }}>{t("tg_currency_notice_body")}</p>
-        </div>
-      )}
 
       {mode === "input" && (
         <div className="tg-legend">
@@ -690,21 +685,25 @@ function TgTracking({ t, year, selMonth, reps, yearGroups, actualGroup, aggOK, p
 }
 
 /* ---- input: grouped by PIC + customer type, editable T1–T12 (same template as tracking, target only) ---- */
+// Targets are stored in VND; the cell is edited in the currency the page shows and converted
+// back to VND on save, so the number typed is the number displayed.
 function TgGInputCell({ val, canEdit, onCommit, cur }) {
   const [editing, setEditing] = useState(false);
   const [v, setV] = useState("");
+  const rate = ((TG.CURRENCIES || {})[cur] || { rate: 1 }).rate || 1;
+  const commit = () => { const n = parseFloat(String(v).replace(/,/g, "")); onCommit(isNaN(n) ? 0 : Math.round(n * rate)); setEditing(false); };
   if (editing) {
     return (
       <td className="tg-c-target">
-        <input className="input tg-input" autoFocus value={v}
+        <input className="input tg-input" autoFocus value={v} title={cur} placeholder={cur}
           onChange={e => setV(e.target.value)}
-          onBlur={() => { onCommit(parseFloat(v) || 0); setEditing(false); }}
-          onKeyDown={e => { if (e.key === "Enter") { onCommit(parseFloat(v) || 0); setEditing(false); } if (e.key === "Escape") setEditing(false); }} />
+          onBlur={commit}
+          onKeyDown={e => { if (e.key === "Enter") commit(); if (e.key === "Escape") setEditing(false); }} />
       </td>
     );
   }
   return (
-    <td className="cell-money tg-c-target tg-ginput" onClick={() => { if (canEdit) { setV(String(val || "")); setEditing(true); } }} title={canEdit ? "Click to edit" : ""}>
+    <td className="cell-money tg-c-target tg-ginput" onClick={() => { if (canEdit) { setV(val ? String(Math.round(val / rate * 100) / 100) : ""); setEditing(true); } }} title={canEdit ? cur : ""}>
       {tgCompact(val, cur)}
     </td>
   );

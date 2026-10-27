@@ -77,18 +77,64 @@ function RetentionKpi({ label, value, color, active, onClick, sub, money }) {
   );
 }
 
-// per-customer sales notes per product code, persisted locally (key = customerId|code)
+// Per-customer sales notes per product code (key = customerId|code). Stored on the server,
+// one row per note in the "retNotes" table (append-only, so two people adding notes at once
+// never overwrite each other); localStorage only caches them for a fast first paint.
+// Notes written before this lived in this browser only: they are uploaded once, keeping
+// their date, and each gets a stable id so a second upload is a no-op.
 const RET_NOTES_LS = "ttcrm_ret_prodnotes_v1";
+const RET_NOTES_TABLE = "retNotes";
+const retNoteId = (key, text, ts) => {
+  let h = 5381; const s = key + "|" + text + "|" + ts;
+  for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0;
+  return "rn-local-" + (h >>> 0).toString(36) + "-" + s.length.toString(36);
+};
+function retNotesMap(list) {
+  const m = {};
+  list.slice().sort((x, y) => String(x.ts || "").localeCompare(String(y.ts || "")) || String(x.id).localeCompare(String(y.id)))
+    .forEach(n => { if (n && n.key) (m[n.key] = m[n.key] || []).push(n); });
+  return m;
+}
 function useProductNotes() {
+  const { user } = useApp();
   const [notes, setNotes] = useState(() => {
     try { return JSON.parse(localStorage.getItem(RET_NOTES_LS)) || {}; } catch (e) { return {}; }
   });
+  const cache = (m) => { try { localStorage.setItem(RET_NOTES_LS, JSON.stringify(m)); } catch (e) {} };
+  const putNotes = (rows) => fetch(window.CRM.SB.url + "/" + RET_NOTES_TABLE, { method: "POST", headers: window.CRM.SB.headers(),
+    body: JSON.stringify(rows.map(n => ({ id: n.id, data: n, updated_at: new Date().toISOString() }))) });
+  useEffect(() => {
+    let on = true;
+    (async () => {
+      const remote = (await window.CRM.SB.getRows(RET_NOTES_TABLE).catch(() => null)) || [];
+      const have = new Set(remote.map(n => n.id));
+      // first load after the move to the server: upload this browser's notes
+      let local = {};
+      try { local = JSON.parse(localStorage.getItem(RET_NOTES_LS)) || {}; } catch (e) {}
+      const up = [];
+      Object.entries(local).forEach(([key, arr]) => (arr || []).forEach(n => {
+        const text = typeof n === "string" ? n : (n && n.text) || "";
+        const ts = (n && n.ts) || "";
+        if (!text) return;
+        const id = (n && n.id) || retNoteId(key, text, ts);
+        if (!have.has(id)) { up.push({ id, key, text, ts, by: (n && n.by) || "" }); have.add(id); }
+      }));
+      if (up.length) { try { const r = await putNotes(up); if (r.ok) remote.push(...up); } catch (e) {} }
+      if (!on) return;
+      const m = retNotesMap(remote);
+      setNotes(m); cache(m);
+    })();
+    return () => { on = false; };
+  }, []);
   const addNote = (key, text) => {
+    const n = { id: "rn-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), key, text,
+      ts: new Date().toISOString().slice(0, 10), by: user ? (user.salesCode || user.name) : "" };
     setNotes(prev => {
-      const next = { ...prev, [key]: [...(prev[key] || []), { text, ts: new Date().toISOString().slice(0, 10) }] };
-      try { localStorage.setItem(RET_NOTES_LS, JSON.stringify(next)); } catch (e) {}
+      const next = { ...prev, [key]: [...(prev[key] || []), n] };
+      cache(next);
       return next;
     });
+    putNotes([n]).catch(e => console.warn("[retNotes] save failed", e));
   };
   return [notes, addNote];
 }

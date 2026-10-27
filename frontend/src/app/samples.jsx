@@ -21,7 +21,7 @@ function SampleStatusBadge({ status, t }) {
   );
 }
 
-function SamplesPage({ openCustomer, openProject }) {
+function SamplesPage({ openCustomer, openProject, selected, setSelected }) {
   const { t, isBoss, samples, customers, scopeCustomers, scopeProjects, projects, users, canExport, canEdit, canDelete: canDeletePerm, lvlOr, deleteSamples, addSamplesBulk, picFilterCodes } = useApp();
   const [q, setQ] = useState("");
   const sel = useRowSelection();
@@ -30,7 +30,10 @@ function SamplesPage({ openCustomer, openProject }) {
   const [importing, setImporting] = useState(false);
   const [status, setStatus] = useState("");
   const [creating, setCreating] = useState(false);
-  const [detail, setDetail] = useState(null);
+  const [localDetail, setLocalDetail] = useState(null);
+  // Driven by the app shell when given (deep link from a Pipelines card), else local.
+  const detail = setSelected ? selected : localDetail;
+  const setDetail = setSelected || setLocalDetail;
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [pic, setPic] = useState("");
   const [resultFilter, setResultFilter] = useState("");
@@ -73,8 +76,10 @@ function SamplesPage({ openCustomer, openProject }) {
   };
   const pics = [...new Set([...(picFilterCodes || []), ...scoped.map(s => (s.pic || "").trim().toUpperCase())].filter(Boolean))].sort();
 
-  const todayStr = new Date().toISOString().slice(0, 10);
-  // follow-up tasks: testStatus is still "Đang test" and followUpDate <= today
+  // Local calendar date (toISOString is UTC: before 7 am in Vietnam it still reads yesterday).
+  const _now = new Date();
+  const todayStr = _now.getFullYear() + "-" + String(_now.getMonth() + 1).padStart(2, "0") + "-" + String(_now.getDate()).padStart(2, "0");
+  // follow-up tasks: testStatus is still "Đang test" and followUpDate <= today (today counts as due)
   const followUps = scoped.filter(s => s.testStatus === "Đang test" && s.followUpDate && s.followUpDate <= todayStr);
 
   const list = scoped.filter(s => {
@@ -185,7 +190,7 @@ function SamplesPage({ openCustomer, openProject }) {
             {followUps.map(s => (
               <div className="mini-row row-click" key={s.id} onClick={() => setDetail(s.id)}>
                 <span className="mini-name">{custName(s.customerId)} · {s.productCode}</span>
-                <small className="dim">{s.followUpDate <= todayStr ? t("smp_followup_overdue") : t("smp_followup_today")} · {SM.fmtDate(s.followUpDate)}</small>
+                <small className="dim">{s.followUpDate < todayStr ? t("smp_followup_overdue") : t("smp_followup_today")} · {SM.fmtDate(s.followUpDate)}</small>
               </div>
             ))}
           </div>
@@ -226,10 +231,10 @@ function SamplesPage({ openCustomer, openProject }) {
                     {s.projectId && <small className="cell-sub">{projName(s.projectId)}</small>}
                   </td>
                   <td className="hide-sm">{(() => { const codes = (s.items && s.items.length) ? s.items.map(it => it.structureCode || it.sku || it.productCode).filter(Boolean) : String(s.productCode || "").split(",").map(x => x.trim()).filter(Boolean); return codes.length ? codes.map((c, ci) => <div key={ci}>{c}</div>) : <span className="dim">—</span>; })()}<small className="cell-sub">{s.ink} · {s.width}×{s.length}</small></td>
-                  <td className="hide-sm">{SM.fmtDate(s.sentDate)}</td>
+                  <td className="hide-sm cell-date">{SM.fmtDate(s.sentDate)}</td>
                   <td className="num">{(s.items && s.items.length) ? SM.fmtMoneyFull(lineItemTotals(s.items).value, (s.items[0] && s.items[0].currency) || "VND") : <span className="dim">—</span>}</td>
                   <td><SampleStatusBadge status={s.testStatus} t={t} /></td>
-                  <td className="hide-sm">{SM.fmtDate(s.followUpDate)}</td>
+                  <td className="hide-sm cell-date">{SM.fmtDate(s.followUpDate)}</td>
                   <td className="hide-sm">{s.comparedAgainst || "—"}</td>
                   <td className="hide-sm">{s.pic ? <OwnerChip code={s.pic} t={t} /> : <span className="dim">—</span>}</td>
                 </tr>
@@ -272,7 +277,7 @@ function SamplesPage({ openCustomer, openProject }) {
 
       {canDelete && <BulkBar count={sel.count} noun={t("nav_samples")} allIds={list.map(s => s.id)} onSelectAll={ids => sel.setSelected(new Set(ids))} onDelete={() => crmConfirm(t("bulk_confirm"), () => { deleteSamples([...sel.selected]); sel.clear(); })} onClear={sel.clear} />}
 
-      {importing && <GenericImportModal titleKey="smp_new" hintKey="smp_import_hint" templateName="samples" fields={SAMPLE_IMPORT_FIELDS}
+      {importing && <GenericImportModal titleKey="smp_import_title" hintKey="smp_import_hint" templateName="samples" fields={SAMPLE_IMPORT_FIELDS}
         onClose={() => setImporting(false)}
         onImport={(items) => {
           const num = (v) => parseFloat(String(v || "").replace(/[^\d.-]/g, "")) || 0;

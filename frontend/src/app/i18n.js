@@ -1,7 +1,7 @@
 // Todaytec CRM — UI strings (EN default, VI, TH)
 window.I18N = {
   en: {
-    qx_send: "Send quotation", qx_title: "Send quotation", qx_back: "Back to quotation", qx_format: "File format", qx_download: "Download", qx_email_me: "Email to {email}", qx_show_usd: "Show USD column", qx_files_ready: "Files ready. Click each one below to save it.", qx_downloaded: "Downloaded.", qx_sent: "Sent to {email}. Check your inbox and forward it to the customer.", qx_failed: "Could not create or send the quotation", qx_default_saved: "Saved as the default for {c}.", qx_seller: "Seller (company)", qx_company_name: "Company name", qx_company_setup: "Company info: first-time setup for {c}", qx_company_setup_hint: "Enter the seller details once. After saving they are fixed on every quotation for {c}; only an admin can change them.", qx_company_fixed: "Company info for {c}", qx_company_fixed_hint: "Fixed for every quotation in {c}. Only an admin can change it.", qx_company_editing: "Edit company info for {c}", qx_company_addr1: "Address line 1", qx_company_addr2: "Address line 2", qx_company_city_tax: "City / Tax ID", qx_company_save: "Save company info", qx_company_edit: "Edit company info", qx_company_saved: "Company info for {c} saved.", qx_company_save_failed: "Could not save the company info", qx_company_load_failed: "Could not load the company info", qx_company_name_required: "Enter the company name.", qx_company_taken: "Company info for {c} was just saved by someone else and is now fixed; it is shown below.", qx_company_required: "Save the company info for {c} (Seller section) before downloading or emailing.", qx_customer: "Customer & terms", qx_currency: "Currency", qx_base_ccy: "Price currency (as stored)", qx_quote_ccy: "Quote currency", qx_lines: "Products", qx_unit_price: "Unit price", qx_note: "Note for this product (shown in the Note column)", qx_terms: "Terms & conditions", qx_terms_title: "Title", qx_add_term: "Add a term", qx_core: "Include core price table", qx_add_core: "Add a core row", qx_save_default: "Save as default for {c}", qx_preview: "Preview",
+    qx_send: "Send quotation", qx_title: "Send quotation", qx_back: "Back to quotation", qx_format: "File format", qx_download: "Download", qx_email_me: "Email to {email}", qx_show_usd: "Show USD column", qx_files_ready: "Files ready. Click each one below to save it.", qx_downloaded: "Downloaded.", qx_sent: "Sent to {email}. Check your inbox and forward it to the customer.", qx_failed: "Could not create or send the quotation", qx_default_saved: "Saved as the default for {c}.", qx_seller: "Seller (company)", qx_company_name: "Company name", qx_company_setup: "Company info: first-time setup for {c}", qx_company_setup_hint: "Enter the seller details once. After saving they are fixed on every quotation for {c}; only an admin or a Quotations admin can change them.", qx_company_fixed: "Company info for {c}", qx_company_fixed_hint: "Fixed for every quotation in {c}. Only an admin or a Quotations admin can change it.", qx_company_editing: "Edit company info for {c}", qx_company_addr1: "Address line 1", qx_company_addr2: "Address line 2", qx_company_city_tax: "City / Tax ID", qx_company_save: "Save company info", qx_company_edit: "Edit company info", qx_company_saved: "Company info for {c} saved.", qx_company_save_failed: "Could not save the company info", qx_company_load_failed: "Could not load the company info", qx_company_name_required: "Enter the company name.", qx_company_taken: "Company info for {c} was just saved by someone else and is now fixed; it is shown below.", qx_company_required: "Save the company info for {c} (Seller section) before downloading or emailing.", qx_customer: "Customer & terms", qx_currency: "Currency", qx_base_ccy: "Price currency (as stored)", qx_quote_ccy: "Quote currency", qx_lines: "Products", qx_unit_price: "Unit price", qx_note: "Note for this product (shown in the Note column)", qx_terms: "Terms & conditions", qx_terms_title: "Title", qx_add_term: "Add a term", qx_core: "Include core price table", qx_add_core: "Add a core row", qx_save_default: "Save as default for {c}", qx_preview: "Preview",
     appName: "Todaytec CRM",
     tagline: "Barcoding The World",
     // nav
@@ -28,6 +28,7 @@ window.I18N = {
     pd_price_ref: "Reference price only: it pre-fills new POs and forecasts. Each PO keeps the price entered on it, so editing this never changes PO values.",
     pd_in_use_warn: "This code is used by POs already entered. Deleting it removes it from the catalogue only — the POs keep their own product name and price.",
     del_confirm: "Delete this item? This action cannot be undone.",
+    pol_del_po_confirm: "Delete PO {po} with all its {n} line(s)? This cannot be undone.",
     pd_count: "products", pd_exists: "A product with this name already exists.",
     pd_itmref: "EDP code (ITMREF)", pd_itmref_note: "Sage EDP item reference for this product variant.",
     pd_eccshoaxx: "Structure code (ECCSHOAXX)", pd_product_type: "Product type", pd_size: "Size (mm × m)",
@@ -101,8 +102,8 @@ window.I18N = {
     ov_po_target_rep: "PO vs Target by sales rep",
     ov_po_target_type: "PO vs Target by customer type",
     ov_full_year: "Full year {y}",
-    ov_total_value: "Total value", ov_total_value_foot: "PO + Project + Forecast",
-    ov_po_value: "PO value", ov_forecast_value: "Forecast value", ov_by_customer: "By customer", ov_po_count: "PO count",
+    ov_total_value: "Total value", ov_total_value_foot: "PO + Project + Submitted forecast",
+    ov_po_value: "PO value", ov_forecast_value: "Submitted forecast", ov_by_customer: "By customer", ov_po_count: "PO count",
     ov_cvr: "CVR (proj / hot leads)",
     cu_has: "Has", cu_has_projects: "Has projects", cu_has_po: "Has PO",
     // login
@@ -157,7 +158,8 @@ window.I18N = {
     cu_show_less: "Show less",
     cu_add: "Add customer", cu_create: "Create customer",
     cu_edit: "Edit customer", cu_short_name: "Short name", cu_title_role: "Job title", cu_dept: "Department",
-    nc_label: "Short name", nc_joins: "Joins existing parent · {n} company(s)", nc_creates: "Creates a new parent",
+    nc_label: "Name Code", nc_joins: "Joins existing parent · {n} company(s)", nc_creates: "Creates a new parent",
+    li_code_ph: "Product code…", li_no_sku: "No SKU found", li_no_code: "No product code found", li_no_struct: "No structure code matches — this code is not in the system yet", qt_approved_ph: "Mr. Hoang (if priced below the floor)",
     nc_suggested: "suggested", nc_from_name: "From company name", nc_company_one: "company", nc_company_many: "companies",
     nc_parent: "Name Code", nc_companies_under: "Companies under this Name Code", nc_viewing: "viewing", nc_combined: "Combined across {n} companies",
     nc_parent_company: "Parent · Name Code",
@@ -175,7 +177,7 @@ window.I18N = {
     dup_phone: "Same phone", dup_email: "Same email",
     // pipeline
     pl_title: "Pipelines", pl_kanban: "Board", pl_list: "List", pl_drag: "Drag cards between stages — status updates to the stage default.",
-    pl_empty: "No customers in this stage",
+    pl_empty: "No projects in this stage", qt_import_title: "Import quotations", pr_import_title: "Import projects", smp_import_title: "Import samples",
     // projects
     pr_title: "Projects", pr_new: "New Project", pr_customer: "Customer", pr_name: "Project name",
     pr_new_customer: "New customer", pr_new_cust_name: "New customer name", pr_new_cust_ph: "Company name",
@@ -407,8 +409,6 @@ window.I18N = {
     pd_import_upserted: "updated", pd_import_added: "added", pd_import_newadded: "new products added.", pd_variants: "variants",
 
     // ---- Target currency notice ----
-    tg_currency_notice_title: "Multi-currency targets (coming soon)",
-    tg_currency_notice_body: "The data schema already reserves a target_currency field per target row, so targets can be entered and tracked in VND, THB, or USD without re-keying historic data. Display/edit UI for this is not wired up yet.",
 
     // ---- Sales Forecast price referral ----
     fc_price_referral_title: "Price referral", fc_price_referral_body: "Suggested unit price is calculated from this customer's PO history for the same product (most recent matching POs, average VND/sqm or VND/roll).",
@@ -442,7 +442,7 @@ window.I18N = {
     ovp_mat_partial: "Product totals are computed from the POs loaded in this browser. Run the po_agg_material migration for full-history figures.",
   },
   vi: {
-    qx_send: "Gửi báo giá", qx_title: "Gửi báo giá", qx_back: "Quay lại báo giá", qx_format: "Định dạng file", qx_download: "Tải về", qx_email_me: "Gửi email tới {email}", qx_show_usd: "Hiện cột USD", qx_files_ready: "File đã sẵn sàng. Bấm từng file bên dưới để lưu.", qx_downloaded: "Đã tải về.", qx_sent: "Đã gửi tới {email}. Kiểm tra hộp thư và chuyển tiếp cho khách.", qx_failed: "Không tạo / gửi được báo giá", qx_default_saved: "Đã lưu làm mặc định cho {c}.", qx_seller: "Người bán (công ty)", qx_company_name: "Tên công ty", qx_company_setup: "Thông tin công ty: nhập lần đầu cho {c}", qx_company_setup_hint: "Chỉ nhập một lần. Sau khi lưu, thông tin này cố định trên mọi báo giá của {c}; chỉ admin được sửa.", qx_company_fixed: "Thông tin công ty – {c}", qx_company_fixed_hint: "Cố định cho mọi báo giá của {c}. Chỉ admin được sửa.", qx_company_editing: "Sửa thông tin công ty – {c}", qx_company_addr1: "Địa chỉ dòng 1", qx_company_addr2: "Địa chỉ dòng 2", qx_company_city_tax: "Tỉnh/TP / MST", qx_company_save: "Lưu thông tin công ty", qx_company_edit: "Sửa thông tin công ty", qx_company_saved: "Đã lưu thông tin công ty cho {c}.", qx_company_save_failed: "Không lưu được thông tin công ty", qx_company_load_failed: "Không tải được thông tin công ty", qx_company_name_required: "Nhập tên công ty.", qx_company_taken: "Thông tin công ty cho {c} vừa được người khác lưu và đã cố định; xem bên dưới.", qx_company_required: "Lưu thông tin công ty cho {c} (phần Người bán) trước khi tải về hoặc gửi email.", qx_customer: "Khách hàng & điều khoản", qx_currency: "Tiền tệ", qx_base_ccy: "Tiền gốc của giá (đang lưu)", qx_quote_ccy: "Tiền báo giá", qx_lines: "Sản phẩm", qx_unit_price: "Đơn giá", qx_note: "Ghi chú cho sản phẩm (cột Note)", qx_terms: "Điều khoản & điều kiện", qx_terms_title: "Tiêu đề", qx_add_term: "Thêm điều khoản", qx_core: "Kèm bảng giá lõi", qx_add_core: "Thêm dòng lõi", qx_save_default: "Lưu làm mặc định cho {c}", qx_preview: "Xem trước",
+    qx_send: "Gửi báo giá", qx_title: "Gửi báo giá", qx_back: "Quay lại báo giá", qx_format: "Định dạng file", qx_download: "Tải về", qx_email_me: "Gửi email tới {email}", qx_show_usd: "Hiện cột USD", qx_files_ready: "File đã sẵn sàng. Bấm từng file bên dưới để lưu.", qx_downloaded: "Đã tải về.", qx_sent: "Đã gửi tới {email}. Kiểm tra hộp thư và chuyển tiếp cho khách.", qx_failed: "Không tạo / gửi được báo giá", qx_default_saved: "Đã lưu làm mặc định cho {c}.", qx_seller: "Người bán (công ty)", qx_company_name: "Tên công ty", qx_company_setup: "Thông tin công ty: nhập lần đầu cho {c}", qx_company_setup_hint: "Chỉ nhập một lần. Sau khi lưu, thông tin này cố định trên mọi báo giá của {c}; chỉ admin hoặc người có quyền Admin ở Báo giá được sửa.", qx_company_fixed: "Thông tin công ty – {c}", qx_company_fixed_hint: "Cố định cho mọi báo giá của {c}. Chỉ admin hoặc người có quyền Admin ở Báo giá được sửa.", qx_company_editing: "Sửa thông tin công ty – {c}", qx_company_addr1: "Địa chỉ dòng 1", qx_company_addr2: "Địa chỉ dòng 2", qx_company_city_tax: "Tỉnh/TP / MST", qx_company_save: "Lưu thông tin công ty", qx_company_edit: "Sửa thông tin công ty", qx_company_saved: "Đã lưu thông tin công ty cho {c}.", qx_company_save_failed: "Không lưu được thông tin công ty", qx_company_load_failed: "Không tải được thông tin công ty", qx_company_name_required: "Nhập tên công ty.", qx_company_taken: "Thông tin công ty cho {c} vừa được người khác lưu và đã cố định; xem bên dưới.", qx_company_required: "Lưu thông tin công ty cho {c} (phần Người bán) trước khi tải về hoặc gửi email.", qx_customer: "Khách hàng & điều khoản", qx_currency: "Tiền tệ", qx_base_ccy: "Tiền gốc của giá (đang lưu)", qx_quote_ccy: "Tiền báo giá", qx_lines: "Sản phẩm", qx_unit_price: "Đơn giá", qx_note: "Ghi chú cho sản phẩm (cột Note)", qx_terms: "Điều khoản & điều kiện", qx_terms_title: "Tiêu đề", qx_add_term: "Thêm điều khoản", qx_core: "Kèm bảng giá lõi", qx_add_core: "Thêm dòng lõi", qx_save_default: "Lưu làm mặc định cho {c}", qx_preview: "Xem trước",
     appName: "Todaytec CRM", tagline: "Barcoding The World",
     nav_overview: "Tổng quan", nav_customers: "Khách hàng", nav_pipelines: "Pipeline",
     nav_projects: "Dự án", nav_admin: "Phân quyền",
@@ -467,6 +467,7 @@ window.I18N = {
     pd_price_ref: "Giá tham khảo: chỉ dùng để đề xuất khi tạo PO và forecast. Mọi PO giữ giá đã nhập trên PO đó, nên sửa giá ở đây không đổi giá trị PO.",
     pd_in_use_warn: "Mã này đang được dùng trong PO đã nhập. Xóa chỉ gỡ khỏi danh mục sản phẩm — PO vẫn giữ nguyên tên và giá đã lưu.",
     del_confirm: "Xóa mục này? Hành động này không thể hoàn tác.",
+    pol_del_po_confirm: "Xóa PO {po} cùng toàn bộ {n} dòng? Không thể hoàn tác.",
     pd_count: "sản phẩm", pd_exists: "Đã có sản phẩm trùng tên.",
     pd_itmref: "Mã EDP (ITMREF)", pd_itmref_note: "Mã EDP (Sage) cho biến thể sản phẩm này.",
     pd_eccshoaxx: "Mã cấu trúc (ECCSHOAXX)", pd_product_type: "Loại sản phẩm", pd_size: "Kích thước (mm × m)",
@@ -540,8 +541,8 @@ window.I18N = {
     ov_po_target_rep: "PO so với chỉ tiêu theo sale",
     ov_po_target_type: "PO so với chỉ tiêu theo nhóm khách hàng",
     ov_full_year: "Cả năm {y}",
-    ov_total_value: "Tổng giá trị", ov_total_value_foot: "PO + Dự án + Dự báo",
-    ov_po_value: "Giá trị PO", ov_forecast_value: "Giá trị dự báo", ov_by_customer: "Theo khách hàng", ov_po_count: "Số lượng PO",
+    ov_total_value: "Tổng giá trị", ov_total_value_foot: "PO + Dự án + Dự báo đã gửi",
+    ov_po_value: "Giá trị PO", ov_forecast_value: "Dự báo đã gửi", ov_by_customer: "Theo khách hàng", ov_po_count: "Số lượng PO",
     ov_cvr: "CVR (dự án / hot leads)",
     cu_has: "Có", cu_has_projects: "Có dự án", cu_has_po: "Có PO",
     login_title: "Đăng nhập Todaytec CRM",
@@ -591,7 +592,8 @@ window.I18N = {
     cu_show_less: "Thu gọn",
     cu_add: "Thêm khách hàng", cu_create: "Tạo khách hàng",
     cu_edit: "Sửa khách hàng", cu_short_name: "Tên rút gọn", cu_title_role: "Chức danh", cu_dept: "Phòng ban",
-    nc_label: "Tên rút gọn", nc_joins: "Gộp vào nhóm có sẵn · {n} công ty", nc_creates: "Tạo nhóm mới",
+    nc_label: "Mã nhóm", nc_joins: "Gộp vào nhóm có sẵn · {n} công ty", nc_creates: "Tạo nhóm mới",
+    li_code_ph: "Mã SP…", li_no_sku: "Không tìm thấy SKU", li_no_code: "Không tìm thấy mã SP", li_no_struct: "Không có mã cấu trúc nào khớp — mã này chưa có trên hệ thống", qt_approved_ph: "Mr. Hoang (nếu giảm giá dưới sàn)",
     nc_suggested: "gợi ý", nc_from_name: "Từ tên công ty", nc_company_one: "công ty", nc_company_many: "công ty",
     nc_parent: "Mã nhóm", nc_companies_under: "Các công ty thuộc mã nhóm này", nc_viewing: "đang xem", nc_combined: "Tổng hợp từ {n} công ty",
     nc_parent_company: "Công ty mẹ · Name Code",
@@ -608,7 +610,7 @@ window.I18N = {
     dup_bizId: "Trùng mã số DN", dup_name: "Trùng tên công ty", "dup_name~": "Tên tương tự",
     dup_phone: "Trùng SĐT", dup_email: "Trùng email",
     pl_title: "Pipeline", pl_kanban: "Bảng", pl_list: "Danh sách", pl_drag: "Kéo thẻ giữa các cột — trạng thái sẽ cập nhật theo cột mới.",
-    pl_empty: "Chưa có khách ở giai đoạn này",
+    pl_empty: "Chưa có dự án ở giai đoạn này", qt_import_title: "Nhập báo giá", pr_import_title: "Nhập dự án", smp_import_title: "Nhập mẫu",
     pr_title: "Dự án", pr_new: "Tạo dự án", pr_customer: "Khách hàng", pr_name: "Tên dự án",
     pr_new_customer: "Khách hàng mới", pr_new_cust_name: "Tên khách hàng mới", pr_new_cust_ph: "Tên công ty",
     pr_classification: "Phân loại dự án", pr_product: "Sản phẩm đề xuất", pr_ink: "Dòng mực", pr_ink_auto: "Tự động theo sản phẩm đã chọn", pr_ink_none: "Chọn sản phẩm để xác định dòng mực",
@@ -838,8 +840,6 @@ window.I18N = {
     pd_import_upserted: "đã cập nhật", pd_import_added: "đã thêm mới", pd_import_newadded: "sản phẩm mới được thêm.", pd_variants: "biến thể",
 
     // ---- Target currency notice ----
-    tg_currency_notice_title: "Chỉ tiêu đa tiền tệ (sắp ra mắt)",
-    tg_currency_notice_body: "Schema dữ liệu đã chuẩn bị sẵn trường target_currency cho từng dòng chỉ tiêu, cho phép nhập và theo dõi chỉ tiêu bằng VND, THB hoặc USD mà không cần nhập lại dữ liệu lịch sử. Giao diện hiển thị/chỉnh sửa cho tính năng này chưa được kết nối.",
 
     // ---- Sales Forecast price referral ----
     fc_price_referral_title: "Gợi ý giá bán", fc_price_referral_body: "Giá đề xuất được tính từ lịch sử PO của khách hàng này với cùng sản phẩm (các PO khớp gần nhất, trung bình VND/m² hoặc VND/cuộn).",
@@ -873,7 +873,7 @@ window.I18N = {
     ovp_mat_partial: "Số liệu theo sản phẩm đang tính từ các PO đã tải trong trình duyệt. Chạy migration po_agg_material để lấy đủ lịch sử.",
   },
   th: {
-    qx_send: "ส่งใบเสนอราคา", qx_title: "ส่งใบเสนอราคา", qx_back: "กลับไปที่ใบเสนอราคา", qx_format: "รูปแบบไฟล์", qx_download: "ดาวน์โหลด", qx_email_me: "ส่งอีเมลถึง {email}", qx_show_usd: "แสดงคอลัมน์ USD", qx_files_ready: "ไฟล์พร้อมแล้ว คลิกแต่ละไฟล์ด้านล่างเพื่อบันทึก", qx_downloaded: "ดาวน์โหลดแล้ว", qx_sent: "ส่งถึง {email} แล้ว ตรวจสอบกล่องจดหมายและส่งต่อให้ลูกค้า", qx_failed: "สร้างหรือส่งใบเสนอราคาไม่สำเร็จ", qx_default_saved: "บันทึกเป็นค่าเริ่มต้นของ {c} แล้ว", qx_seller: "ผู้ขาย (บริษัท)", qx_company_name: "ชื่อบริษัท", qx_company_setup: "ข้อมูลบริษัท: ตั้งค่าครั้งแรกสำหรับ {c}", qx_company_setup_hint: "กรอกข้อมูลผู้ขายเพียงครั้งเดียว หลังบันทึกแล้วจะใช้คงที่ในทุกใบเสนอราคาของ {c} มีเพียงแอดมินที่แก้ไขได้", qx_company_fixed: "ข้อมูลบริษัท – {c}", qx_company_fixed_hint: "ใช้คงที่ในทุกใบเสนอราคาของ {c} มีเพียงแอดมินที่แก้ไขได้", qx_company_editing: "แก้ไขข้อมูลบริษัท – {c}", qx_company_addr1: "ที่อยู่ บรรทัด 1", qx_company_addr2: "ที่อยู่ บรรทัด 2", qx_company_city_tax: "จังหวัด / เลขประจำตัวผู้เสียภาษี", qx_company_save: "บันทึกข้อมูลบริษัท", qx_company_edit: "แก้ไขข้อมูลบริษัท", qx_company_saved: "บันทึกข้อมูลบริษัทของ {c} แล้ว", qx_company_save_failed: "บันทึกข้อมูลบริษัทไม่สำเร็จ", qx_company_load_failed: "โหลดข้อมูลบริษัทไม่สำเร็จ", qx_company_name_required: "กรอกชื่อบริษัท", qx_company_taken: "ข้อมูลบริษัทของ {c} เพิ่งถูกบันทึกโดยผู้อื่นและใช้คงที่แล้ว แสดงอยู่ด้านล่าง", qx_company_required: "บันทึกข้อมูลบริษัทของ {c} (ส่วนผู้ขาย) ก่อนดาวน์โหลดหรือส่งอีเมล", qx_customer: "ลูกค้าและเงื่อนไข", qx_currency: "สกุลเงิน", qx_base_ccy: "สกุลเงินของราคา (ที่บันทึกไว้)", qx_quote_ccy: "สกุลเงินในใบเสนอราคา", qx_lines: "สินค้า", qx_unit_price: "ราคาต่อหน่วย", qx_note: "หมายเหตุสินค้า (คอลัมน์ Note)", qx_terms: "ข้อกำหนดและเงื่อนไข", qx_terms_title: "หัวข้อ", qx_add_term: "เพิ่มข้อกำหนด", qx_core: "แนบตารางราคาแกน", qx_add_core: "เพิ่มแถวแกน", qx_save_default: "บันทึกเป็นค่าเริ่มต้นของ {c}", qx_preview: "ตัวอย่าง",
+    qx_send: "ส่งใบเสนอราคา", qx_title: "ส่งใบเสนอราคา", qx_back: "กลับไปที่ใบเสนอราคา", qx_format: "รูปแบบไฟล์", qx_download: "ดาวน์โหลด", qx_email_me: "ส่งอีเมลถึง {email}", qx_show_usd: "แสดงคอลัมน์ USD", qx_files_ready: "ไฟล์พร้อมแล้ว คลิกแต่ละไฟล์ด้านล่างเพื่อบันทึก", qx_downloaded: "ดาวน์โหลดแล้ว", qx_sent: "ส่งถึง {email} แล้ว ตรวจสอบกล่องจดหมายและส่งต่อให้ลูกค้า", qx_failed: "สร้างหรือส่งใบเสนอราคาไม่สำเร็จ", qx_default_saved: "บันทึกเป็นค่าเริ่มต้นของ {c} แล้ว", qx_seller: "ผู้ขาย (บริษัท)", qx_company_name: "ชื่อบริษัท", qx_company_setup: "ข้อมูลบริษัท: ตั้งค่าครั้งแรกสำหรับ {c}", qx_company_setup_hint: "กรอกข้อมูลผู้ขายเพียงครั้งเดียว หลังบันทึกแล้วจะใช้คงที่ในทุกใบเสนอราคาของ {c} มีเพียงแอดมินหรือผู้มีสิทธิ์ Admin ในใบเสนอราคาที่แก้ไขได้", qx_company_fixed: "ข้อมูลบริษัท – {c}", qx_company_fixed_hint: "ใช้คงที่ในทุกใบเสนอราคาของ {c} มีเพียงแอดมินหรือผู้มีสิทธิ์ Admin ในใบเสนอราคาที่แก้ไขได้", qx_company_editing: "แก้ไขข้อมูลบริษัท – {c}", qx_company_addr1: "ที่อยู่ บรรทัด 1", qx_company_addr2: "ที่อยู่ บรรทัด 2", qx_company_city_tax: "จังหวัด / เลขประจำตัวผู้เสียภาษี", qx_company_save: "บันทึกข้อมูลบริษัท", qx_company_edit: "แก้ไขข้อมูลบริษัท", qx_company_saved: "บันทึกข้อมูลบริษัทของ {c} แล้ว", qx_company_save_failed: "บันทึกข้อมูลบริษัทไม่สำเร็จ", qx_company_load_failed: "โหลดข้อมูลบริษัทไม่สำเร็จ", qx_company_name_required: "กรอกชื่อบริษัท", qx_company_taken: "ข้อมูลบริษัทของ {c} เพิ่งถูกบันทึกโดยผู้อื่นและใช้คงที่แล้ว แสดงอยู่ด้านล่าง", qx_company_required: "บันทึกข้อมูลบริษัทของ {c} (ส่วนผู้ขาย) ก่อนดาวน์โหลดหรือส่งอีเมล", qx_customer: "ลูกค้าและเงื่อนไข", qx_currency: "สกุลเงิน", qx_base_ccy: "สกุลเงินของราคา (ที่บันทึกไว้)", qx_quote_ccy: "สกุลเงินในใบเสนอราคา", qx_lines: "สินค้า", qx_unit_price: "ราคาต่อหน่วย", qx_note: "หมายเหตุสินค้า (คอลัมน์ Note)", qx_terms: "ข้อกำหนดและเงื่อนไข", qx_terms_title: "หัวข้อ", qx_add_term: "เพิ่มข้อกำหนด", qx_core: "แนบตารางราคาแกน", qx_add_core: "เพิ่มแถวแกน", qx_save_default: "บันทึกเป็นค่าเริ่มต้นของ {c}", qx_preview: "ตัวอย่าง",
     appName: "Todaytec CRM", tagline: "Barcoding The World",
     nav_overview: "ภาพรวม", nav_customers: "ลูกค้า", nav_pipelines: "ไปป์ไลน์",
     nav_projects: "โปรเจกต์", nav_admin: "สิทธิ์การใช้งาน",
@@ -897,6 +897,7 @@ window.I18N = {
     pd_price_ref: "ราคาอ้างอิงเท่านั้น: ใช้เสนอตอนสร้าง PO และพยากรณ์ ทุก PO เก็บราคาของตันเอง การแก้ที่นี่จึงไม่กระทบมูลค่า PO",
     pd_in_use_warn: "รหัสนี้ถูกใช้ใน PO ที่บันทึกแล้ว การลบจะเอาออกจากแคตตาล็อกเท่านั้น — PO ยังคงชื่อและราคาเดิม",
     del_confirm: "ลบรายการนี้? ไม่สามารถย้อนกลับได้",
+    pol_del_po_confirm: "ลบ PO {po} พร้อมทั้งหมด {n} รายการ? ไม่สามารถย้อนกลับได้",
     pd_count: "สินค้า", pd_exists: "มีสินค้าชื่อนี้อยู่แล้ว",
     pd_itmref: "รหัส EDP (ITMREF)", pd_itmref_note: "รหัสอ้างอิง EDP (Sage) ของสินค้านี้",
     pd_eccshoaxx: "รหัสโครงสร้าง (ECCSHOAXX)", pd_product_type: "ประเภทสินค้า", pd_size: "ขนาด (มม. × ม.)",
@@ -970,8 +971,8 @@ window.I18N = {
     ov_po_target_rep: "PO เทียบเป้าหมายตามเซลส์",
     ov_po_target_type: "PO เทียบเป้าหมายตามประเภทลูกค้า",
     ov_full_year: "ทั้งปี {y}",
-    ov_total_value: "มูลค่ารวม", ov_total_value_foot: "PO + โปรเจกต์ + พยากรณ์",
-    ov_po_value: "มูลค่า PO", ov_forecast_value: "มูลค่าพยากรณ์", ov_by_customer: "ตามลูกค้า", ov_po_count: "จำนวน PO",
+    ov_total_value: "มูลค่ารวม", ov_total_value_foot: "PO + โปรเจกต์ + พยากรณ์ที่ส่งแล้ว",
+    ov_po_value: "มูลค่า PO", ov_forecast_value: "พยากรณ์ที่ส่งแล้ว", ov_by_customer: "ตามลูกค้า", ov_po_count: "จำนวน PO",
     ov_cvr: "CVR (โปรเจกต์ / hot leads)",
     cu_has: "มี", cu_has_projects: "มีโปรเจกต์", cu_has_po: "มี PO",
     login_title: "เข้าสู่ระบบ Todaytec CRM",
@@ -1021,7 +1022,8 @@ window.I18N = {
     cu_show_less: "ย่อ",
     cu_add: "เพิ่มลูกค้า", cu_create: "สร้างลูกค้า",
     cu_edit: "แก้ไขลูกค้า", cu_short_name: "ชื่อย่อ", cu_title_role: "ตำแหน่ง", cu_dept: "แผนก",
-    nc_label: "ชื่อย่อ", nc_joins: "รวมเข้ากลุ่มเดิม · {n} บริษัท", nc_creates: "สร้างกลุ่มใหม่",
+    nc_label: "รหัสกลุ่ม", nc_joins: "รวมเข้ากลุ่มเดิม · {n} บริษัท", nc_creates: "สร้างกลุ่มใหม่",
+    li_code_ph: "รหัสสินค้า…", li_no_sku: "ไม่พบ SKU", li_no_code: "ไม่พบรหัสสินค้า", li_no_struct: "ไม่มีรหัสโครงสร้างที่ตรงกัน — รหัสนี้ยังไม่มีในระบบ", qt_approved_ph: "Mr. Hoang (หากลดราคาต่ำกว่าราคาขั้นต่ำ)",
     nc_suggested: "แนะนำ", nc_from_name: "จากชื่อบริษัท", nc_company_one: "บริษัท", nc_company_many: "บริษัท",
     nc_parent: "รหัสกลุ่ม", nc_companies_under: "บริษัทในรหัสกลุ่มนี้", nc_viewing: "กำลังดู", nc_combined: "รวมจาก {n} บริษัท",
     nc_parent_company: "บริษัทแม่ · Name Code",
@@ -1038,7 +1040,7 @@ window.I18N = {
     dup_bizId: "เลขทะเบียนซ้ำ", dup_name: "ชื่อบริษัทซ้ำ", "dup_name~": "ชื่อใกล้เคียง",
     dup_phone: "เบอร์โทรซ้ำ", dup_email: "อีเมลซ้ำ",
     pl_title: "ไปป์ไลน์", pl_kanban: "บอร์ด", pl_list: "รายการ", pl_drag: "ลากการ์ดระหว่างคอลัมน์ — สถานะจะอัปเดตตามขั้นใหม่",
-    pl_empty: "ยังไม่มีลูกค้าในขั้นนี้",
+    pl_empty: "ยังไม่มีโปรเจกต์ในขั้นนี้", qt_import_title: "นำเข้าใบเสนอราคา", pr_import_title: "นำเข้าโปรเจกต์", smp_import_title: "นำเข้าตัวอย่าง",
     pr_title: "โปรเจกต์", pr_new: "สร้างโปรเจกต์", pr_customer: "ลูกค้า", pr_name: "ชื่อโปรเจกต์",
     pr_new_customer: "ลูกค้าใหม่", pr_new_cust_name: "ชื่อลูกค้าใหม่", pr_new_cust_ph: "ชื่อบริษัท",
     pr_classification: "ประเภทโปรเจกต์", pr_product: "สินค้าที่เสนอ", pr_ink: "ชนิดหมึก", pr_ink_auto: "อัตโนมัติจากสินค้าที่เลือก", pr_ink_none: "เลือกสินค้าเพื่อกำหนดชนิดหมึก",
@@ -1268,8 +1270,6 @@ window.I18N = {
     pd_import_upserted: "อัปเดตแล้ว", pd_import_added: "เพิ่มแล้ว", pd_import_newadded: "สินค้าใหม่ที่เพิ่ม", pd_variants: "รูปแบบ",
 
     // ---- Target currency notice ----
-    tg_currency_notice_title: "เป้าหมายหลายสกุลเงิน (เร็วๆนี้)",
-    tg_currency_notice_body: "โครงสร้างข้อมูลได้เตรียมฟิลด์ target_currency ไว้ในแต่ละแถวเป้าหมายแล้ว ทำให้สามารถบันทึกและติดตามเป้าหมายเป็น VND, THB หรือ USD ได้โดยไม่ต้องคีย์ข้อมูลย้อนหลังใหม่ ส่วนหน้าจอแสดง/แก้ไขยังไม่ได้เชื่อมต่อใช้งาน",
 
     // ---- Sales Forecast price referral ----
     fc_price_referral_title: "คำแนะนำราคา", fc_price_referral_body: "ราคาที่แนะนำคำนวณจากประวัติ PO ของลูกค้ารายนี้สำหรับสินค้าเดียวกัน (PO ที่ตรงกันล่าสุด เฉลี่ยเป็น VND/ตร.ม. หรือ VND/ม้วน)",

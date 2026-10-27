@@ -1,7 +1,7 @@
 // Todaytec CRM — Pipelines (PROJECT pipeline: kanban board by project stage + list toggle)
 const PL = window.CRM;
 
-function PipelinesPage({ openCustomer, openProject }) {
+function PipelinesPage({ openCustomer, openProject, openSample, openQuote }) {
   const { t, isBoss, scopeProjects, scopeCustomers, customers, updateProject, addLog, money, currency, setCurrency, users, samples, quotations, lvlOr } = useApp();
   // Moving a card changes the project's stage: needs edit on Pipelines.
   const canMove = lvlOr("pipelines", "edit", true);
@@ -96,6 +96,13 @@ function PipelinesPage({ openCustomer, openProject }) {
     addLog({ customerId: id, type: "status", text: t("st_" + stage) });
   };
 
+  // Sample and quotation cards open their own record; project cards open the project.
+  const openCard = (p) => {
+    if (p._type === "sample" && openSample) return openSample(p.id);
+    if (p._type === "quote" && openQuote) return openQuote(p.id);
+    if (!p._type && openProject) return openProject(p.id);
+    openCustomer(p.customerId);
+  };
   const onDrop = (e, stage) => {
     e.preventDefault();
     const id = e.dataTransfer.getData("text/project-id");
@@ -145,9 +152,9 @@ function PipelinesPage({ openCustomer, openProject }) {
                 {byStage[stage].map(p => (
                   <div key={(p._type || "proj") + "-" + p.id} className={"kcard" + (p._type ? " kcard-" + p._type : "")} draggable={!p._type && canMove}
                     onDragStart={p._type || !canMove ? undefined : e => e.dataTransfer.setData("text/project-id", p.id)}
-                    onClick={() => p._type ? openCustomer(p.customerId) : (openProject ? openProject(p.id) : openCustomer(p.customerId))}>
+                    onClick={() => openCard(p)}>
                     <strong>{p.name}{p._type === "sample" ? <span className="kcard-tag">{t("nav_samples")}</span> : p._type === "quote" ? <span className="kcard-tag">{t("nav_quotations") || "Quote"}</span> : null}</strong>
-                    <small className="kcard-status">{custName(p.customerId)}{p._type === "sample" && p.sub ? " · " + p.sub : ""}</small>
+                    <small className="kcard-status">{custName(p.customerId)}{p._type === "sample" && p.sub ? " · " + (t("smp_status_" + p.sub.replace(/\s+/g, "_")) || p.sub) : ""}</small>
                     <div className="kcard-foot">
                       <span className="kcard-meta">{p._type === "sample" ? "—" : (PL.fmtMoneyFull ? PL.fmtMoneyFull(p.value || 0, currency) : money(p.value || 0))}</span>
                       {p.following && <OwnerChip code={p.following} t={t} />}
@@ -170,7 +177,7 @@ function PipelinesPage({ openCustomer, openProject }) {
               <table className="table">
                 <tbody>
                   {byStage[stage].map(p => (
-                    <tr key={(p._type || "proj") + "-" + p.id} className="row-click" onClick={() => p._type ? openCustomer(p.customerId) : (openProject ? openProject(p.id) : openCustomer(p.customerId))}>
+                    <tr key={(p._type || "proj") + "-" + p.id} className="row-click" onClick={() => openCard(p)}>
                       <td><strong className="cell-main">{p.name}</strong>
                         <small className="cell-sub">{p.id} · {custNC(p.customerId) ? custNC(p.customerId) + " · " : ""}{custName(p.customerId)}</small></td>
                       <td className="hide-sm">{p._type === "sample" ? t("nav_samples") : p._type === "quote" ? (t("nav_quotations") || "Quote") : (p.classification || "—")}</td>
