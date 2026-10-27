@@ -12,7 +12,8 @@ function fcPct(actual, fcVal) {
   return (actual / fcVal) * 100;
 }
 function fcFmtPct(p) {
-  if (p === Infinity) return "∞";
+  // Nothing committed yet: there is no forecast to measure against.
+  if (p === Infinity) return "—";
   if (!isFinite(p)) return "—";
   return Math.round(p) + "%";
 }
@@ -269,9 +270,9 @@ function SalesForecastPage() {
   // signed off on the greyed suggested number. The decision is PER CELL — once the rep has
   // entered either side, the other is derived from what they typed (never from the
   // suggestion), so an explicit qty 0 commits 0 đ and a typed qty prices at that qty.
-  const effFC = (key, sku, sm, yk) => {
+  const effFC = (key, sku, sm, yk) => fcCommitted(getMeta(key, sku).status) ? adoptFC(key, sku, sm, yk) : getFC(key, sku, yk);
+  const adoptFC = (key, sku, sm, yk) => {
     const c = getFC(key, sku, yk);
-    if (!fcCommitted(getMeta(key, sku).status)) return c;
     const set = (v) => v != null && v !== "";
     const hasQ = set(c.fcQty), hasV = set(c.fcValue);
     if (hasQ && hasV) return c;
@@ -286,6 +287,20 @@ function SalesForecastPage() {
       return { ...c, fcQty: unit > 0 ? Math.max(c.fcValue > 0 ? 1 : 0, Math.round(c.fcValue / unit)) : 0 };
     }
     return { ...c, fcQty: sq, fcValue: sv };
+  };
+
+  // Submitting / locking writes the adopted figures into the cells that were still empty, so
+  // the committed forecast is stored once and every page (Overview included) reads the same
+  // numbers instead of re-deriving suggestions from its own copy of the actuals.
+  const commitStatus = (key, sku, sm, st) => {
+    if (fcCommitted(st)) allCols.forEach(c => {
+      const yk = ymKey(c.y, c.m), cur = getFC(key, sku, yk);
+      const has = (v) => v != null && v !== "";
+      if (has(cur.fcQty) && has(cur.fcValue)) return;
+      const a = adoptFC(key, sku, sm, yk);
+      if (a.fcQty || a.fcValue) saveSkuCell(key, sku, yk, { fcQty: a.fcQty || 0, fcValue: a.fcValue || 0 });
+    });
+    saveSkuMeta(key, sku, "status", st);
   };
 
   // ---- KPIs (selected month) ----
@@ -516,7 +531,7 @@ function SalesForecastPage() {
                             </td>
                             <td rowSpan={2}>
                               <select className="select" style={{ fontSize: 11, padding: "3px 6px" }} disabled={!fcEdit}
-                                value={meta.status || "Draft"} onChange={e => saveSkuMeta(cm.key, sku, "status", e.target.value)}>
+                                value={meta.status || "Draft"} onChange={e => commitStatus(cm.key, sku, sm, e.target.value)}>
                                 {FCC.FORECAST_STATUSES.map(s => <option key={s} value={s}>{t("fc_status_" + s)}</option>)}
                               </select>
                             </td>

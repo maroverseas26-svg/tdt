@@ -170,14 +170,36 @@ function OverviewPage({ goCustomer, goProjects, goReorder, goProject, goPOPeriod
     });
     return s;
   }, [scopeCustomers]);
-  const fcSkuCur = (() => {
-    let s = 0;
-    Object.entries(skuForecast || {}).forEach(([cid, skus]) => {
-      if (!skus || !_fcCustOK.has(cid)) return;
-      Object.values(skus).forEach(sm => { if (!sm || sm._deleted) return; const c = (sm.cells || {})[_fcCurKey]; if (c) s += c.fcValue || 0; });
+  // Committed forecast (Submitted / Locked rows) from the per-SKU store — the same rule and
+  // the same stored figures as the Sales Forecast page's "Total forecast (month)": the page
+  // writes the adopted numbers into the cells when a row is submitted or locked.
+  const fcAgg = React.useMemo(() => {
+    const repOfKey = {};
+    scopeCustomers.forEach(c => {
+      repOfKey[c.id] = repOfKey[c.id] || c;
+      const nc = CC.nameCodeOf ? CC.nameCodeOf(c) : "";
+      const k = nc && CC.nameCodeKey ? CC.nameCodeKey(nc) : "";
+      if (k && (!repOfKey[k] || /head\s*office/i.test(c.name || ""))) repOfKey[k] = c;
     });
-    return s;
-  })();
+    const byYm = {}, byCust = {}, byRep = {};
+    Object.entries(skuForecast || {}).forEach(([key, skus]) => {
+      if (!skus || !_fcCustOK.has(key)) return;
+      const rc = repOfKey[key];
+      Object.values(skus).forEach(sm => {
+        if (!sm || sm._deleted || !(sm.status === "Submitted" || sm.status === "Locked")) return;
+        Object.entries(sm.cells || {}).forEach(([yk, c]) => {
+          const v = (c && +c.fcValue) || 0; if (!v) return;
+          byYm[yk] = (byYm[yk] || 0) + v;
+          if (rc) {
+            byCust[rc.id] = (byCust[rc.id] || 0) + v;
+            if (rc.owner) byRep[rc.owner] = (byRep[rc.owner] || 0) + v;
+          }
+        });
+      });
+    });
+    return { byYm, byCust, byRep };
+  }, [skuForecast, _fcCustOK, scopeCustomers]);
+  const fcSkuCur = fcAgg.byYm[_fcCurKey] || 0;
 
   // hot leads with at least 1 project
   const hotIds = new Set(custs.filter(c => c.funnel === "Hot Lead").map(c => c.id));
@@ -232,9 +254,9 @@ function OverviewPage({ goCustomer, goProjects, goReorder, goProject, goPOPeriod
   const _poYtdFrom = (new Date().getFullYear()) + "-01-01";
   const _poYtdTo = new Date().toISOString().slice(0, 10);
   const poYTD = scopePOs.filter(p => (p.date || "") >= _poYtdFrom && (p.date || "") <= _poYtdTo).reduce((s, p) => s + (p.amountVnd || 0), 0);
-  const forecastValueTotal = scopeForecast.reduce((s, f) => s + fcVal(f), 0);
+  const forecastValueTotal = Object.entries(fcAgg.byYm).reduce((s, [yk, v]) => s + (yk.slice(0, 4) === String(ovYear) ? v : 0), 0);
   const grandTotalValue = poValueTotal + pipelineValue + forecastValueTotal;
-  const fcByRep = {}; scopeForecast.forEach(f => { fcByRep[f.salesId] = (fcByRep[f.salesId] || 0) + fcVal(f); });
+  const fcByRep = fcAgg.byRep;
   const poByRep = {}; scopePOs.forEach(p => { poByRep[p.pic] = (poByRep[p.pic] || 0) + (p.amountVnd || 0); });
   const projByRep = {}; scopeProjects.forEach(p => { if (p.stage !== "Lost" && p.stage !== "Won") projByRep[p.following] = (projByRep[p.following] || 0) + (p.value || 0); });
   // by customer (top 8 by total value)
@@ -251,7 +273,7 @@ function OverviewPage({ goCustomer, goProjects, goReorder, goProject, goPOPeriod
       (g._pns = g._pns || new Set()).add(pn);
     });
     Object.values(map).forEach(g => { if (g._pns) { g.poCount += g._pns.size; g._pns = null; } });
-    scopeForecast.forEach(f => { if (f.customerId) get(f.customerId).fc += fcVal(f); });
+    Object.entries(fcAgg.byCust).forEach(([cid, v]) => { get(cid).fc += v; });
     scopeProjects.forEach(p => { if (p.stage !== "Lost" && p.stage !== "Won" && p.customerId) get(p.customerId).proj += p.value || 0; });
     return Object.values(map).map(r => ({ ...r, total: r.po + r.fc + r.proj })).sort((a, b) => b.total - a.total);
   })();
@@ -278,8 +300,9 @@ function OverviewPage({ goCustomer, goProjects, goReorder, goProject, goPOPeriod
   const projValPrev = projs.filter(p => inMonth(p.createdAt, prevYear, prevMonth)).reduce((s, p) => s + (p.value || 0), 0);
   const poCur = scopePOs.filter(p => String(p.year) === curYear && p.month - 1 === curMonth).reduce((s, p) => s + (p.amountVnd || 0), 0);
   const poPrev = scopePOs.filter(p => String(p.year) === prevYear && p.month - 1 === prevMonth).reduce((s, p) => s + (p.amountVnd || 0), 0);
-  const fcCur = scopeForecast.filter(f => String(f.targetYear) === curYear && f.targetMonth - 1 === curMonth).reduce((s, f) => s + fcVal(f), 0);
-  const fcPrev = scopeForecast.filter(f => String(f.targetYear) === prevYear && f.targetMonth - 1 === prevMonth).reduce((s, f) => s + fcVal(f), 0);
+  const fcYm = (y, mIdx) => fcAgg.byYm[y + "-" + String(mIdx + 1).padStart(2, "0")] || 0;
+  const fcCur = fcYm(curYear, curMonth);
+  const fcPrev = fcYm(prevYear, prevMonth);
   const totalCur = poCur + fcCur + projValCur;
   const totalPrev = poPrev + fcPrev + projValPrev;
 
@@ -288,7 +311,7 @@ function OverviewPage({ goCustomer, goProjects, goReorder, goProject, goPOPeriod
   const _mArr = () => Array(12).fill(0);
   const poCurArr = _mArr(), poPrevArr = _mArr(), fcCurArr = _mArr(), fcPrevArr = _mArr(), prCurArr = _mArr(), prPrevArr = _mArr();
   scopePOs.forEach(p => { const mi = (p.month || 0) - 1; if (mi < 0 || mi > 11) return; if (String(p.year) === curYear) poCurArr[mi] += p.amountVnd || 0; else if (String(p.year) === _yPrev) poPrevArr[mi] += p.amountVnd || 0; });
-  scopeForecast.forEach(f => { const mi = (f.targetMonth || 0) - 1; if (mi < 0 || mi > 11) return; if (String(f.targetYear) === curYear) fcCurArr[mi] += fcVal(f); else if (String(f.targetYear) === _yPrev) fcPrevArr[mi] += fcVal(f); });
+  for (let mi = 0; mi < 12; mi++) { fcCurArr[mi] = fcYm(curYear, mi); fcPrevArr[mi] = fcYm(_yPrev, mi); }
   projs.forEach(p => { if (!p.createdAt) return; const y = p.createdAt.slice(0, 4); const mi = +p.createdAt.slice(5, 7) - 1; if (mi < 0 || mi > 11) return; if (y === curYear) prCurArr[mi] += p.value || 0; else if (y === _yPrev) prPrevArr[mi] += p.value || 0; });
   const totCurArr = _mArr(), totPrevArr = _mArr();
   for (let i = 0; i < 12; i++) { totCurArr[i] = poCurArr[i] + fcCurArr[i] + prCurArr[i]; totPrevArr[i] = poPrevArr[i] + fcPrevArr[i] + prPrevArr[i]; }
