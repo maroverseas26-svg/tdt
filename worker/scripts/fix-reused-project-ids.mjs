@@ -21,8 +21,15 @@
 // Idempotent: moved logs no longer predate anything; a placeholder left by an interrupted run
 // is found again by its _recoveredKey and reused.
 //
+// Phase 2 (same run): samples / quotations whose projectId is a reused id and whose date (sent
+// date, quote date, created; a sample's SMP-<base36 ms> id as a last resort) is before that id's
+// creation moment are re-pointed to the placeholder — with two placeholders for one id, the
+// one whose date window holds the item and whose country code matches the PIC's / customer's
+// country; when those disagree the item is listed, not moved. A placeholder whose linked items
+// all name one customer gets that customer.
+//
 // Reported only (nothing changed): quotation numbers whose logs / activity name more than one
-// customer, and samples / quotations linked to a reused project id from before its creation.
+// customer.
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
@@ -139,6 +146,14 @@ async function main() {
   const created = (Array.isArray(activity) ? activity : []).filter((a) => a && a.action === "project" && a.detail === "Created project");
   const usedAct = new Set();
 
+  // The moment a project was created: its "Created project" activity entry (same name and
+  // creator, on its createdAt day), else the start of createdAt.
+  const cutoffOf = (p) => {
+    const cDay = day(p.createdAt);
+    const act = created.find((a) => day(a.ts) === cDay && String(a.target || "").trim() === String(p.name || "").trim() && (!p.createdBy || a.user === p.createdBy)) || null;
+    return { act, cutoff: act ? tsKey(act.ts) : cDay + " 00:00" };
+  };
+
   // ---- detect ----
   const plans = [], skipped = [];
   const rUsed = new Map(); // prefix → highest R in use
@@ -149,10 +164,8 @@ async function main() {
     const own = logsByCust.get(String(p.id)) || [];
     if (!own.length) continue;
     if (!/^\d{4}-\d{2}-\d{2}/.test(String(p.createdAt || ""))) { skipped.push(`${p.id}: no createdAt, ${own.length} log(s) left as they are`); continue; }
-    const cDay = day(p.createdAt);
-    const act = created.find((a) => day(a.ts) === cDay && String(a.target || "").trim() === String(p.name || "").trim() && (!p.createdBy || a.user === p.createdBy));
+    const { act, cutoff } = cutoffOf(p);
     if (act) usedAct.add(act);
-    const cutoff = act ? tsKey(act.ts) : cDay + " 00:00";
     const older = own.filter((x) => tsKey(x.l.ts) && tsKey(x.l.ts) < cutoff).sort((a, b) => tsKey(a.l.ts).localeCompare(tsKey(b.l.ts)));
     if (!older.length) continue;
     // One lost project, or one per author country when those clearly differ.
@@ -215,10 +228,6 @@ async function main() {
       for (const x of g.logs.slice(0, 8)) console.log(`      ${tsKey(x.l.ts)}  ${String(x.l.user || "?").padEnd(8)} ${x.l.type || ""}: ${String(x.l.text || "").slice(0, 60)}`);
       if (g.logs.length > 8) console.log(`      … ${g.logs.length - 8} more`);
     }
-    // Records linked to this id from before the current project existed (report only).
-    const linked = [...sampleRows, ...quoteRows].flatMap((r) => (Array.isArray(r.data) ? r.data : [r.data])).filter((r) => r && !r._deleted && r.projectId === p.id);
-    const before = linked.filter((r) => { const d = day(r.createdAt || r.sentDate || r.date || r.quoteDate || ""); return d && d < day(pl.cutoff); });
-    if (before.length) console.log(`  linked before ${day(pl.cutoff)} (not changed): ${before.map((r) => r.id).join(", ")}`);
     console.log("");
   }
   if (!plans.length) console.log("No project has logs from before its creation.\n");
@@ -242,6 +251,68 @@ async function main() {
     for (const [no, m] of reusedQ) console.log(`  ${no}: ` + [...m].map(([id, how]) => `${id.startsWith("name:") ? id.slice(5) : custName(id)} [${how}]`).join("; "));
   }
 
+  // ---- phase 2: samples / quotations linked to a reused id from before its cutoff ----
+  // They belong to the overwritten project: re-point projectId to its placeholder. With
+  // several placeholders for one id, the item's date picks the window (each placeholder from
+  // its start until the next one starts) and the PIC's / customer's country must agree with
+  // the placeholder's country code; anything left unclear is listed, not moved.
+  const phs = [];   // { id, from, start, cc, project, isNew }
+  for (const p of projects.values()) if (p._recovered && p._recoveredFrom && !p._deleted) phs.push({ id: String(p.id), from: String(p._recoveredFrom), start: day(p.createdAt), cc: String(p.id).slice(0, 2), project: p, isNew: false });
+  for (const { g } of lost) if (!byKey.has(g.project._recoveredKey)) phs.push({ id: g.id, from: g.project._recoveredFrom, start: g.project.createdAt, cc: g.id.slice(0, 2), project: g.project, isNew: true });
+  const phsOf = new Map();
+  for (const ph of phs) (phsOf.get(ph.from) || phsOf.set(ph.from, []).get(ph.from)).push(ph);
+  for (const list of phsOf.values()) list.sort((a, b) => a.start.localeCompare(b.start) || a.id.localeCompare(b.id));
+  const CC_OF = (c) => PROJECT_CC[normCountry(c)] || "";
+  // SMP-<base36 ms>: the id itself carries the creation time.
+  const idDay = (id) => { const m = /^SMP-([0-9A-Z]{6,9})$/.exec(String(id)); const t = m ? parseInt(m[1], 36) : NaN; return t > 1.5e12 && t < 2.5e12 ? new Date(t).toISOString().slice(0, 10) : ""; };
+  const itemDay = (r) => day(r.sentDate || r.quoteDate || r.date || r.createdAt || r.created || "") || idDay(r.id);
+  const items = [...recordsOf(sampleRows).values()].map((r) => ({ r, table: "samples" }))
+    .concat([...quotes.values()].map((r) => ({ r, table: "quotations" }))).filter(({ r }) => r && !r._deleted);
+  const moves = [], unclear = [];
+  for (const { r, table } of items) {
+    const list = phsOf.get(String(r.projectId || ""));
+    if (!list) continue;
+    const cur = projects.get(String(r.projectId));
+    const cut = cur && /^\d{4}-\d{2}-\d{2}/.test(String(cur.createdAt || "")) ? cutoffOf(cur).cutoff : null;
+    const d = itemDay(r);
+    if (!d) { unclear.push({ r, table, why: "no date" }); continue; }
+    if (cut && d >= day(cut)) continue;   // on/after the current project's creation: it is the current project's
+    const ccs = new Set([userCountry(r.pic || r.createdBy), (customers.get(String(r.customerId)) || {}).country].map(CC_OF).filter(Boolean));
+    let pick = null, why = "";
+    if (list.length === 1) pick = list[0];
+    else {
+      let win = null;
+      for (const ph of list) if (!win || ph.start <= d) win = ph.start <= d ? ph : win;
+      if (!win) win = list[0];
+      const byCc = ccs.size === 1 ? list.filter((ph) => ccs.has(ph.cc)) : null;
+      if (ccs.size > 1) why = `PIC / customer countries differ (${[...ccs].join(", ")})`;
+      else if (byCc && byCc.length === 1 && byCc[0] !== win) why = `date ${d} points to ${win.id}, country ${[...ccs][0]} to ${byCc[0].id}`;
+      else pick = byCc && byCc.length === 1 ? byCc[0] : win;
+    }
+    if (pick) moves.push({ r, table, ph: pick, d, ccs });
+    else unclear.push({ r, table, why, d });
+  }
+  // Customer: when every item linked to a placeholder (moved now or earlier) names the same
+  // customer, the placeholder gets it.
+  const custFix = [];
+  for (const ph of phs) {
+    if (ph.project.customerId) continue;
+    const linked = items.filter(({ r }) => String(r.projectId) === ph.id).map(({ r }) => r).concat(moves.filter((m) => m.ph === ph).map((m) => m.r));
+    const ids = new Set(linked.map((r) => String(r.customerId || "")).filter(Boolean));
+    if (ids.size === 1) {
+      const cid = [...ids][0], c = customers.get(cid) || {};
+      const nameCode = String(c.nameCode || c.shortName || c.name || cid).trim();
+      custFix.push({ ph, cid, nameCode });
+      if (ph.isNew) Object.assign(ph.project, { customerId: cid, nameCode });
+    } else if (ids.size > 1) unclear.push({ r: { id: ph.id }, table: "projects", why: `placeholder customer left empty: linked items name ${ids.size} customers (${[...ids].join(", ")})` });
+  }
+  if (moves.length || unclear.length || custFix.length) console.log("\nLinked samples / quotations:");
+  for (const m of moves) console.log(`  ${m.table === "samples" ? "sample   " : "quotation"} ${m.r.id}  ${m.r.projectId} → ${m.ph.id}  (date ${m.d}, customer ${(customers.get(String(m.r.customerId)) || {}).name || m.r.customerId || "-"}, PIC ${m.r.pic || m.r.createdBy || "-"})`);
+  for (const f of custFix) console.log(`  project  ${f.ph.id}  customer ← ${(customers.get(f.cid) || {}).name || f.cid} (${f.cid})`);
+  for (const u of unclear) console.log(`  NOT MOVED ${u.table} ${u.r.id} (${u.r.projectId || ""}): ${u.why}`);
+  const itemWrites = moves.map((m) => ({ table: m.table, row: { id: String(m.r.id), data: { ...m.r, projectId: m.ph.id, _updated: NOW }, updated_at: NOW } }));
+  const projWrites = custFix.filter((f) => !f.ph.isNew).map((f) => ({ id: f.ph.id, data: { ...f.ph.project, customerId: f.cid, nameCode: f.nameCode, _updated: NOW }, updated_at: NOW }));
+
   // ---- writes ----
   const newProjects = lost.filter(({ g }) => !byKey.has(g.project._recoveredKey)).map(({ g }) => ({ id: g.id, data: g.project, updated_at: NOW }));
   const changedRows = new Map();
@@ -251,12 +322,15 @@ async function main() {
     changedRows.set(x.row.id, data);
   }
   const nLogs = lost.reduce((s, { g }) => s + g.logs.length, 0);
-  console.log(`\nPlan: ${plans.length} reused id(s), ${lost.length} lost project(s), ${newProjects.length} placeholder project(s) to create, ${nLogs} log(s) to move (${changedRows.size} log shard row(s) to rewrite)`);
+  console.log(`\nPlan: ${plans.length} reused id(s), ${lost.length} lost project(s), ${newProjects.length} placeholder project(s) to create, ${nLogs} log(s) to move (${changedRows.size} log shard row(s) to rewrite), ` +
+    `${itemWrites.length} sample/quotation link(s) to move, ${custFix.length} placeholder customer(s) to set, ${unclear.length} item(s) left for a person`);
   if (!APPLY) { console.log(`\nDry run — nothing written. Re-run with --apply to fix.\nD1: ${d1.read} rows read, ${d1.written} rows written`); return; }
-  if (!newProjects.length && !changedRows.size) { console.log(`\nNothing to do.\nD1: ${d1.read} rows read, ${d1.written} rows written`); return; }
-  // Placeholders first, then the logs: an interrupted run is finished by running it again.
+  if (!newProjects.length && !changedRows.size && !itemWrites.length && !projWrites.length) { console.log(`\nNothing to do.\nD1: ${d1.read} rows read, ${d1.written} rows written`); return; }
+  // Placeholders first, then what points at them: an interrupted run is finished by running it again.
   for (let i = 0; i < newProjects.length; i += 100) await call("POST", "/rest/v1/projects", newProjects.slice(i, i + 100));
+  if (projWrites.length) await call("POST", "/rest/v1/projects", projWrites);
   for (const [id, data] of changedRows) await call("POST", "/rest/v1/logs", { id, data, updated_at: NOW });
+  for (const t of ["samples", "quotations"]) { const rows = itemWrites.filter((w) => w.table === t).map((w) => w.row); if (rows.length) await call("POST", `/rest/v1/${t}`, rows); }
   console.log(`\nApplied.\nD1: ${d1.read} rows read, ${d1.written} rows written`);
 }
 
