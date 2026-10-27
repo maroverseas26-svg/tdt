@@ -12,7 +12,7 @@
 // count=exact (Content-Range); POST upsert (object or array); DELETE with filters.
 import { json, lit, HttpError } from "./util.js";
 import { externalizeRecord, hasInlineFiles } from "./files.js";
-import { profilesBlob, saveProfilesBlob } from "./auth.js";
+import { profilesBlob, saveProfilesBlob, isAdmin } from "./auth.js";
 
 const TABLE_RE = /^[A-Za-z][A-Za-z0-9_]{0,63}$/;
 const FIELD_RE = /^data((?:->>?[A-Za-z0-9_]+)+)$/;
@@ -208,14 +208,39 @@ async function remove(env, ctx, url) {
   return new Response(null, { status: 204 });
 }
 
+// settings rows only an admin may change: `roles` (the role list behind Permissions) and,
+// inside `quote_templates`, a country's seller company once it has been saved — anyone may
+// still make that first save and edit the rest of the templates.
+const savedCompany = (tpl, market) => {
+  const c = tpl && tpl[market] && tpl[market].company;
+  return Array.isArray(c) && String(c[0] || "").trim() ? c : null;
+};
+async function guardSettingsWrite(env, ctx, req, text) {
+  if (ctx.table !== "settings" || isAdmin(ctx.me)) return;
+  if (req.method === "DELETE") throw new HttpError(403, "admin_only");
+  let rows;
+  try { rows = JSON.parse(text); } catch { bad("bad_json"); }
+  for (const row of Array.isArray(rows) ? rows : [rows]) {
+    const id = row && String(row.id);
+    if (id === "roles") throw new HttpError(403, "admin_only");
+    if (id !== "quote_templates") continue;
+    const cur = await env.DB.prepare("SELECT data FROM crm_rows WHERE tbl = 'settings' AND id = 'quote_templates'").first("data");
+    const saved = cur ? JSON.parse(cur) : null;
+    for (const market of Object.keys(saved || {})) {
+      const was = savedCompany(saved, market);
+      if (was && JSON.stringify(was) !== JSON.stringify((row.data && row.data[market] || {}).company)) throw new HttpError(403, "company_fixed");
+    }
+  }
+}
+
 export async function restRoute(req, env, url, me) {
   const table = url.pathname.slice("/rest/v1/".length);
   if (!TABLE_RE.test(table)) return json({ message: "unknown table" }, 404);
   const ctx = { table, pos: table === "pos", me };
   try {
     if (req.method === "GET" || req.method === "HEAD") return await select(env, ctx, url, req);
-    if (req.method === "POST") { await upsertRows(env, ctx, await req.text()); return new Response(null, { status: 201 }); }
-    if (req.method === "DELETE") return await remove(env, ctx, url);
+    if (req.method === "POST") { const text = await req.text(); await guardSettingsWrite(env, ctx, req, text); await upsertRows(env, ctx, text); return new Response(null, { status: 201 }); }
+    if (req.method === "DELETE") { await guardSettingsWrite(env, ctx, req, ""); return await remove(env, ctx, url); }
     return json({ message: "method not allowed" }, 405);
   } catch (e) {
     if (e instanceof HttpError) return json({ message: e.code }, e.status);

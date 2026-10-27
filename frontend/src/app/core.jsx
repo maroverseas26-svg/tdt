@@ -83,8 +83,68 @@ function AppProvider({ children, tweaks }) {
   // True once the Worker's account list has replaced the local copy — the Permissions page
   // derives role module lists from real accounts only after this.
   const [usersSynced, setUsersSynced] = useState(false);
+  // Roles live in settings/roles on the server (shared by every admin and read by every
+  // account for its data scope); localStorage is only a cache. rolesRemote: "loading" until the
+  // first read, then "loaded", "missing" (nothing stored yet) or "error" (read failed).
   const [roles, setRolesState] = useState(() => C.loadJSON(C.LS.roles, C.SEED_ROLES));
-  const setRoles = (r) => { setRolesState(r); C.saveJSON(C.LS.roles, r); };
+  const [rolesRemote, setRolesRemote] = useState("loading");
+  const [rolesLocalOnly, setRolesLocalOnly] = useState([]);
+  const [rolesSave, setRolesSave] = useState(null); // "saving" | "saved" | "error"
+  const rolesRef = useRef(roles);
+  const rolesOps = useRef({ put: new Map(), del: new Set(), busy: false });
+  const keepRoles = (list) => { setRolesState(list); rolesRef.current = list; C.saveJSON(C.LS.roles, list); };
+  // The fixed roles must always exist, whatever the stored list says.
+  const withFixedRoles = (list) => [...C.SEED_ROLES.filter(f => f.fixed && !list.some(r => r.id === f.id)), ...list];
+  const readRoles = async () => {
+    const r = await fetch(C.SB.url + "/settings?id=eq.roles&select=data", { cache: "no-store" });
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    const j = await r.json();
+    const v = j && j[0] ? j[0].data : null;
+    return Array.isArray(v) && v.length ? v : null;
+  };
+  // Each write re-reads the stored list and applies only this browser's changes (per role id),
+  // so two admins editing different roles never undo each other. Edits made while a write is
+  // in flight are coalesced into the next one.
+  const flushRoles = async () => {
+    const ops = rolesOps.current;
+    if (ops.busy) return;
+    ops.busy = true; setRolesSave("saving");
+    let merged = null, failed = false;
+    while (ops.put.size || ops.del.size) {
+      const put = ops.put, del = ops.del;
+      ops.put = new Map(); ops.del = new Set();
+      try {
+        const base = (await readRoles()) || [];
+        merged = base.filter(r => !del.has(r.id)).map(r => put.get(r.id) || r);
+        put.forEach((r, id) => { if (!merged.some(x => x.id === id)) merged.push(r); });
+        const w = await fetch(C.SB.url + "/settings", { method: "POST", headers: C.SB.headers(), body: JSON.stringify({ id: "roles", data: merged, updated_at: new Date().toISOString() }) });
+        if (!w.ok) throw new Error("HTTP " + w.status);
+      } catch (e) {
+        console.warn("[roles] save failed", e); failed = true;
+        // keep the unsaved changes queued for the next edit
+        put.forEach((r, id) => { if (!ops.put.has(id)) ops.put.set(id, r); });
+        del.forEach(id => ops.del.add(id));
+        break;
+      }
+    }
+    ops.busy = false;
+    setRolesSave(failed ? "error" : "saved");
+    // nothing left queued: show the stored list (it may hold another admin's changes too)
+    if (!failed && merged && !ops.put.size && !ops.del.size) keepRoles(withFixedRoles(merged));
+  };
+  // opts.all writes every role (first seed), not just the ones that changed.
+  const setRoles = (next, opts) => {
+    const prev = rolesRef.current;
+    keepRoles(next);
+    if (!isBoss) return;
+    const ops = rolesOps.current;
+    next.forEach(r => {
+      const p = prev.find(x => x.id === r.id);
+      if ((opts && opts.all) || !p || JSON.stringify(p) !== JSON.stringify(r)) { ops.put.set(r.id, r); ops.del.delete(r.id); }
+    });
+    prev.forEach(p => { if (!next.some(r => r.id === p.id)) { ops.del.add(p.id); ops.put.delete(p.id); } });
+    if (ops.put.size || ops.del.size) setTimeout(flushRoles, 400);
+  };
   const roleOf = useCallback((u) => {
     const id = String((u && u.role) || "");
     const hit = roles.find(r => r.id === id);
@@ -806,6 +866,17 @@ function AppProvider({ children, tweaks }) {
           try { localStorage.setItem(C.LS.custOverrides, JSON.stringify(ov)); } catch (e) {}
         }
       } catch (e) {}
+      // ---- Roles: settings/roles is authoritative; keep local-only roles aside so the
+      // Permissions page can add the ones accounts still use. ----
+      try {
+        const list = await readRoles();
+        if (on && list) {
+          const local = rolesRef.current;
+          setRolesLocalOnly(local.filter(r => !list.some(x => x.id === r.id)));
+          keepRoles(withFixedRoles(list));
+          setRolesRemote("loaded");
+        } else if (on) setRolesRemote("missing");
+      } catch (e) { if (on) setRolesRemote("error"); }
       // ---- Users: the Worker's account list is authoritative (edits, password resets and
       // soft-deletes — tombstones with _deleted:true — all happen there). ----
       try {
@@ -1699,7 +1770,7 @@ function AppProvider({ children, tweaks }) {
   const forecastLive = useMemo(() => forecast.filter(f => !f._deleted), [forecast]);
 
   const value = {
-    t, lang, setLang, users, setUsers, updateUser, usersSynced, roles, setRoles, roleOf,
+    t, lang, setLang, users, setUsers, updateUser, usersSynced, roles, setRoles, rolesRemote, rolesLocalOnly, rolesSave, roleOf,
     customers, projects: projectsLive, activity, addActivity,
     user, authReady, isBoss, isCountryMgr, teamCodes, assignableCodes, assignablePics, allSalesCodes, login, logout, updateCustomer, updateStatus, moveToStage, addCustomer, addCustomersBulk, addContactLog,
     logs, addLog, logsFor,

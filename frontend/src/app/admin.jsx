@@ -33,7 +33,7 @@ function adDeriveRoleModules(roles, users) {
 }
 
 function AdminPage() {
-  const { t, user, isBoss, users, setUsers, usersSynced, customers, roles, setRoles, roleOf } = useApp();
+  const { t, user, isBoss, users, setUsers, usersSynced, customers, roles, setRoles, rolesRemote, rolesLocalOnly, rolesSave, roleOf } = useApp();
   const [adding, setAdding] = useState(false);
   const [addingRole, setAddingRole] = useState(false);
   const [selUserId, setSelUserId] = useState(null);
@@ -50,13 +50,19 @@ function AdminPage() {
     { key: "active", label: t("ad_active") },
   ];
 
-  // One-time migration — waits for the Worker's account list so it never derives from a
-  // stale local copy.
+  // One-time migration — waits for the Worker's account list and the stored role list, so it
+  // never derives from a stale local copy. When nothing is stored yet, the first admin to open
+  // this page seeds settings/roles (roles only; accounts are not written). Roles that only this
+  // browser knew and that accounts still use are added to the stored list.
   useEffect(() => {
-    if (!isBoss || !usersSynced) return;
-    const next = adDeriveRoleModules(roles, users);
-    if (next) setRoles(next);
-  }, [isBoss, usersSynced]);
+    if (!isBoss || !usersSynced || rolesRemote === "loading" || rolesRemote === "error") return;
+    const live = users.filter(u => !u._deleted);
+    const extras = rolesRemote === "loaded" ? rolesLocalOnly.filter(r => live.some(u => u.role === r.id)) : [];
+    const base = extras.length ? [...roles, ...extras] : roles;
+    const next = adDeriveRoleModules(base, users) || base;
+    if (rolesRemote === "missing") setRoles(next, { all: true });
+    else if (next !== roles) setRoles(next);
+  }, [isBoss, usersSynced, rolesRemote]);
 
   if (!isBoss) return <div className="page"><div className="card empty-card">{t("ad_only_bod")}</div></div>;
 
@@ -176,6 +182,9 @@ function AdminPage() {
   };
 
   const scopeShort = (s) => s === "all" ? t("scope_all_s") : s === "country" ? t("scope_country_s") : t("scope_own_s");
+  const rolesBadge = rolesSave === "error" ? <span className="perm-save perm-save-error" role="status">{t("ad_roles_save_failed")}</span>
+    : rolesRemote === "error" ? <span className="perm-save perm-save-error" role="status">{t("ad_roles_load_failed")}</span>
+    : rolesSave === "saving" ? <span className="perm-save" role="status">{t("ad_saving")}</span> : null;
   const saveBadge = save && (
     <span className={"perm-save perm-save-" + save.state} role="status">
       {save.state === "saving" ? t("ad_saving") : save.state === "saved" ? t("ad_saved")
@@ -378,6 +387,7 @@ function AdminPage() {
         <div className="perm-card-head">
           <h2>{t("ad_perm_matrix")}</h2>
           {saveBadge}
+          {rolesBadge}
         </div>
         {roleMsg && <div className="perm-msg" role="alert">{roleMsg}<button className="role-x" onClick={() => setRoleMsg("")}>✕</button></div>}
         <div className="perm-scroll">
