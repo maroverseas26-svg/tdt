@@ -18,7 +18,7 @@
 ### Add a customer
 
 1. Click **Add customer**.
-2. Type the **Company** name. The CRM suggests a Name Code in **Short name**.
+2. Type the **Company** name. The CRM suggests a code in **Name Code**.
 3. Keep the suggestion, pick an existing code to join that group, or type a new one.
 4. Fill **Country**, **Type** and **Phone**. They are required.
 5. Add the **Business ID** if you have it. The hint shows the right length per country.

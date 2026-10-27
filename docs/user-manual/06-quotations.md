@@ -32,23 +32,27 @@ A customer with several quotations shows as one row. Click it to see them all.
 4. Click **Save company info**. From then on they are fixed for that country.
 5. Check **Customer & terms**, such as **Attend** and **Term of payment**.
 6. Under **Currency**, pick the **Quote currency** and check the USD rate.
-7. Under **Products**, adjust the **MOQ**, the unit price or the product note if needed.
-8. Check the **Preview** on the right.
+7. Untick **Show USD column** if the customer should not see USD prices.
+8. Under **Products**, adjust the **MOQ**, the unit price or the product note if needed.
+9. Check the **Preview** on the right.
 
 ![Send quotation: file format, Download and Email buttons, and the seller company block](img/send-quotation-seller.png)
+
+![Currency section with the Show USD column checkbox and the Quote currency](img/send-quotation-currency.png)
 
 ### Download or email it
 
 1. Pick the file type at the top: **Excel + PDF**, **Excel** or **PDF**.
-2. Click **Download** to save the files on your computer.
-3. Or click **Email to** your address. The files come to your own inbox.
-4. Forward that email to the customer.
+2. Click **Download**. One file saves at once.
+3. With **Excel + PDF**, the two files appear as links under the buttons. Click each link to save it.
+4. Or click **Email to** your address. The files come to your own inbox.
+5. Forward that email to the customer.
 
-![Email sent message after clicking Email to](img/send-quotation-actions.png)
+![Download links for the Excel and PDF files, next to the Email button](img/send-quotation-actions.png)
 
 **Tips**
 
 - Download and email stay disabled until the seller company is saved for that country.
-- Only an admin can change the seller company once it is saved. Ask your admin if it is wrong.
+- Once saved, only an admin or someone with **Admin** level on Quotations can change the seller company. Ask them if it is wrong.
 - Your changes on **Send quotation** are kept for the next time you send this quote.
 - When a quote is **Won**, create the PO from it. See **PO List**.

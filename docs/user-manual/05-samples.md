@@ -24,8 +24,9 @@
 ### Follow up on time
 
 1. Check the card **Today's task: sample follow-up calls** at the top of the page.
-2. Call each customer on the list and record the feedback.
-3. Use **Test status** or **Advanced filters** to see only the samples you need.
+2. **Follow-up due today** means call today. **Follow-up overdue** means the date has passed.
+3. Call each customer on the list and record the feedback.
+4. Use **Test status** or **Advanced filters** to see only the samples you need.
 
 **Tips**
 

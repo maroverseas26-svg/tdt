@@ -173,23 +173,33 @@ const byText = (page, sel, text) => page.locator(sel).filter({ hasText: text });
   await shot(page, "send-quotation-seller", { area: [$(page, ".qx-page .back-btn"), $(page, ".qx-actions"), $(page, ".qx-company")], marks: [$(page, ".qx-company"), $(page, ".qx-actions")] });
   await $(page, ".qx-company .btn-primary").click();
   await settle(page, 800);
+  const ccyH = page.locator(".qx-form h2", { hasText: "Currency" });
+  await shot(page, "send-quotation-currency", { area: [ccyH, page.locator(".qx-form .form-grid").filter({ has: page.getByLabel("Quote currency") })], marks: [page.locator(".qx-form label", { hasText: "Show USD column" }), page.getByLabel("Quote currency")] });
+  // Excel + PDF: the two files wait as links under the buttons
   await $(page, ".qx-actions select").selectOption("both");
+  await $(page, ".qx-actions .btn-ghost").click();
+  await page.locator(".qx-ready a").first().waitFor({ timeout: 90000 }).catch(() => {});
+  await shot(page, "send-quotation-actions", { area: [$(page, ".qx-page .page-header"), page.locator(".qx-ready").first()], marks: [page.locator(".qx-ready").first(), $(page, ".qx-actions .btn-primary")] });
+  // email to yourself (answered locally, nothing is sent)
   await $(page, ".qx-actions .btn-primary").click();
-  await page.locator("p.login-sent, p.login-err").first().waitFor({ timeout: 60000 }).catch(() => {});
-  await shot(page, "send-quotation-actions", { area: [$(page, ".qx-page .page-header"), page.locator("p.login-sent, p.login-err").first()], marks: [$(page, ".qx-actions select"), $(page, ".qx-actions .btn-primary")] });
+  await page.locator("p.login-sent", { hasText: "Sent to" }).first().waitFor({ timeout: 90000 }).catch(() => {});
   await $(page, ".qx-page .back-btn").click();
   await settle(page, 500);
   await page.locator(".back-btn").first().click();
   await settle(page, 500);
 
-  // New PO from a won quote
-  await page.locator(".pr-cust-link", { hasText: "Chiang Mai Label" }).first().click();
+  // New PO from a won quote (two product lines)
+  await page.locator("tr.grp-row").first().click();
+  await page.waitForTimeout(300);
+  await page.locator("tr.row-click", { hasText: "D02" }).first().click();
   await settle(page, 500);
+  await $(page, ".profile-head select").selectOption("Won");
+  await settle(page, 800);
   const won = page.locator(".card", { hasText: "Create PO" }).first();
-  await shot(page, "po-from-quote", { area: [$(page, ".profile-head"), won], marks: [won.locator("button")] });
+  await shot(page, "po-from-quote", { area: [$(page, ".profile-head"), won], marks: [$(page, ".profile-head select"), won.locator("button")] });
   await won.locator("button").click();
-  await settle(page, 1200);
-  await shot(page, "po-new-form", { area: [page.locator(".modal, .page").first()], marks: [page.locator(".li-row").first().locator("input").nth(1), page.locator(".field", { hasText: "Quotation reference" }).first()], maxH: 820, fixed: (await page.locator(".modal").count()) > 0 });
+  await settle(page, 1500);
+  await shot(page, "po-new-form", { area: [page.locator(".page").first()], marks: [page.locator(".li-wrap").first(), page.locator(".field", { hasText: "Quotation reference" }).first()], maxH: 820 });
   await page.keyboard.press("Escape");
   await page.locator("button", { hasText: "Cancel" }).first().click().catch(() => {});
 
@@ -216,7 +226,7 @@ const byText = (page, sel, text) => page.locator(sel).filter({ hasText: text });
   await nav(page, "Projects");
   await page.locator("tr.row-click", { hasText: "Mekong Ribbon" }).locator("td").nth(1).click();
   await settle(page, 600);
-  await shot(page, "project-stage", { area: [$(page, ".back-btn"), $(page, ".profile-head")], marks: [$(page, ".profile-status select")] });
+  await shot(page, "project-stage", { area: [$(page, ".back-btn"), $(page, ".profile-head")], marks: [$(page, ".profile-head").getByText(/[A-Z]{2}\d{6}-\d{2}/).first(), $(page, ".profile-status select")] });
 
   // Samples: list, then feedback on one sample
   await nav(page, "Samples");
@@ -256,7 +266,7 @@ const byText = (page, sel, text) => page.locator(sel).filter({ hasText: text });
   const page = await newPage(ADMIN);
   await nav(page, "Permissions");
   const card = $(page, ".perm-card");
-  await shot(page, "permissions-matrix", { area: card, marks: [page.locator("select.perm-lv").nth(3), page.locator("select.perm-lv").nth(4)], maxH: 700 });
+  await shot(page, "permissions-matrix", { area: card, marks: [$(page, ".perm-legend"), page.locator("select.perm-lv").nth(3)], maxH: 820 });
   await page.context().close();
 }
 

@@ -31,5 +31,5 @@ The health colours mean:
 **Tips**
 
 - Health is worked out from the customer's PO history and monthly targets.
-- Your note is also copied to the customer's activity log.
+- Your colleagues see your notes too. Each note is also copied to the customer's activity log.
 - Click **Reset all** to clear every filter.

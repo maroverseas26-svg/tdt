@@ -14,15 +14,15 @@
 
 1. Open the quotation and set its **Status** to **Won**.
 2. In the green box **Create PO from this quote**, click **New PO**.
-3. The New PO form opens with the customer, currency, first product line and **Quotation reference** filled in.
-4. Check the **Structure code** on each line and pick it if it is empty.
-5. Add any other lines from the quotation with **+ Add product (SKU)**.
+3. The New PO form opens with the customer, currency, every product line and **Quotation reference** filled in.
+4. Check the quantities and prices against the customer's PO. Fix any line that differs.
+5. If a line's **Structure code** is empty, pick it from the list.
 6. Type the **PO number** and check the **Sales date**.
 7. Click **New PO** to save.
 
 ![Won quotation with the New PO button](img/po-from-quote.png)
 
-![New PO form opened from a quote, with the Quotation reference filled in](img/po-new-form.png)
+![New PO form opened from a quote, with both quote lines and the Quotation reference filled in](img/po-new-form.png)
 
 ### Create a PO without a quotation
 
@@ -35,6 +35,7 @@
 
 **Tips**
 
-- Only the first line of a quotation is copied into the PO. Add the other lines yourself.
+- Click the customer row anywhere, or its arrow, to open or close it.
 - The **Customer group** you pick also changes the customer's group in the CRM.
 - **Order type** (**New** or **Repeat**) is set for you from the customer's PO history.
+- Deleting a PO needs **Admin** level. It removes every line of that PO number.

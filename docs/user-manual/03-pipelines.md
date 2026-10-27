@@ -18,6 +18,6 @@
 
 **Tips**
 
-- Cards tagged **SAMPLES** and **QUOTATIONS** come from the Samples and Quotations modules. You cannot drag them. Clicking them opens the customer.
+- Cards tagged **SAMPLES** and **QUOTATIONS** come from the Samples and Quotations modules. You cannot drag them. Click one to open that sample or quotation.
 - Moving a card needs **Edit** access on Pipelines.
 - The board follows the date range in the top bar. Widen it if a project is missing.

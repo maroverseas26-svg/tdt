@@ -11,7 +11,9 @@ Your admin sets one level per module for your role.
 | **Edit** | Everything in **View**, plus create and edit records. |
 | **Admin** | Everything in **Edit**, plus delete, **Import Excel** and maintenance actions. |
 
-![Permissions matrix with a View / Edit / Admin dropdown per role and module](img/permissions-matrix.png)
+The same legend shows above the matrix on the **Permissions** page.
+
+![Permissions page: the legend of access levels above the matrix of View / Edit / Admin dropdowns](img/permissions-matrix.png)
 
 Your **Data scope** decides whose records you see:
 

@@ -4,7 +4,7 @@
 
 1. Click **Targets** in the sidebar.
 2. Pick the **Year** and the currency.
-3. **Input by PIC** shows the monthly targets per sales rep and customer type group.
+3. **Input by PIC** shows your monthly targets per customer type group.
 4. **By customer** shows the plan per customer and product. Click the arrow on a customer to see its items.
 5. **Tracking** compares target and actual: **MTD Tracking**, **Previous month (Act)** and **YTD Tracking**.
 
@@ -14,7 +14,7 @@
 
 1. Open **Input by PIC** or **By customer**.
 2. Click a month cell.
-3. Type the amount and press **Enter**.
+3. Type the amount in the currency shown on the page, then press **Enter**.
 
 You need **Edit** access on Targets to type in the cells. Actuals come from **PO List**.
 
@@ -38,4 +38,5 @@ You need **Edit** access on Targets to type in the cells. Actuals come from **PO
 
 - Greyed numbers in the **FC** cells are only suggestions: the latest actual × 35%.
 - **Total forecast (month)** counts only rows set to **Submitted** or **Locked**.
+- Submitted and Locked rows also show on **Overview** as **Submitted forecast**.
 - A **Locked** forecast can no longer be edited.

@@ -7,6 +7,7 @@
 //
 // Accounts it creates (local only):
 //   sales.demo@example.com / demo1234  — Sales Executive "Mai Demo" (code MAI), Edit on every team module
+//   nam.demo@example.com   / demo1234  — Sales Executive "Nam Demo" (code NAM), Admin on Quotations (tests only)
 //   admin.demo@example.com / demo1234  — BOD "Demo Admin", used only for the Permissions shot
 import { execFileSync } from "node:child_process";
 import { webcrypto as crypto } from "node:crypto";
@@ -35,7 +36,7 @@ const USERS = [
   { id: "u-demo-mai", name: "Mai Demo", email: "sales.demo@example.com", role: "SALEEXEC", salesCode: "MAI",
     countries: ["Vietnam", "Thailand"], targetCountry: "Vietnam", modules: TEAM, perms: salesPerms, active: true, avatar: "M", phone: "+84 90 000 0001" },
   { id: "u-demo-nam", name: "Nam Demo", email: "nam.demo@example.com", role: "SALEEXEC", salesCode: "NAM",
-    countries: ["Vietnam"], modules: TEAM, perms: salesPerms, active: true, avatar: "N" },
+    countries: ["Vietnam"], modules: TEAM, perms: { ...salesPerms, quotations: "admin" }, active: true, avatar: "N" },
   { id: "u-demo-admin", name: "Demo Admin", email: "admin.demo@example.com", role: "BOD", salesCode: "",
     countries: ["*"], modules: ALL, active: true, avatar: "D" },
 ];
@@ -161,16 +162,29 @@ const PROJECTS = [
     potential: "Medium", stage: "Proposal", result: "", endCustomer: "", industry: "Barcode solutions", application: "Retail labels", supplier: "", competitor: "", failReason: "",
     createdBy: "MAI", following: "MAI", note: "", createdAt: daysAgo(6), probability: 10, expectedCloseDate: daysAhead(60), lossCompetitorPrice: 0, decisionCriteria: "Price", linkedSampleId: "" },
 ];
+// Project codes as the app makes them: <country><YYMMDD>-<NN>, e.g. VN261007-01.
+const PCC = { Vietnam: "VN", Thailand: "TL" };
+const projId = {};
+const perDay = {};
+for (const p of PROJECTS) {
+  const c = CUSTOMERS.find((x) => x.id === p.customerId);
+  const stem = PCC[c.country] + p.createdAt.slice(2, 4) + p.createdAt.slice(5, 7) + p.createdAt.slice(8, 10);
+  perDay[stem] = (perDay[stem] || 0) + 1;
+  projId[p.id] = stem + "-" + String(perDay[stem]).padStart(2, "0");
+}
+const reProj = (id) => projId[id] || id;
+PROJECTS.forEach((p) => { p.id = reProj(p.id); });
 await post("projects", PROJECTS.map((p) => row(p.id, p)));
 
 const SAMPLES = [
   { id: "SMP-D01", customerId: "CD-02", projectId: "P-D01", productCode: "TDR330", ink: "Resin", width: 110, length: 300, qtySent: 3, sentDate: daysAgo(22), courier: "Viettel Post", trackingNo: "DEMO000001",
     testStatus: "Đạt", feedbackDate: daysAgo(20), feedbackNote: "Print is sharp and passes the scratch test.", comparedAgainst: "Current resin", followUpDate: daysAgo(20), pic: "MAI", createdBy: "MAI" },
   { id: "SMP-D02", customerId: "CD-04", projectId: "P-D02", productCode: "TDM238", ink: "Wax/Resin", width: 110, length: 300, qtySent: 2, sentDate: daysAgo(12), courier: "GHTK", trackingNo: "DEMO000002",
-    testStatus: "Đang test", feedbackDate: "", feedbackNote: "", comparedAgainst: "", followUpDate: daysAhead(2), pic: "MAI", createdBy: "MAI" },
+    testStatus: "Đang test", feedbackDate: "", feedbackNote: "", comparedAgainst: "", followUpDate: daysAgo(0), pic: "MAI", createdBy: "MAI" },
   { id: "SMP-D03", customerId: "CD-11", projectId: "", productCode: "TDW108", ink: "Wax", width: 110, length: 300, qtySent: 2, sentDate: daysAgo(4), courier: "Flash Express", trackingNo: "DEMO000003",
     testStatus: "Chưa phản hồi", feedbackDate: "", feedbackNote: "", comparedAgainst: "", followUpDate: daysAhead(5), pic: "MAI", createdBy: "MAI" },
 ];
+SAMPLES.forEach((x) => { x.projectId = reProj(x.projectId); });
 await post("samples", SAMPLES.map((s) => row(s.id, s)));
 
 const line = (code, qty, price, currency) => { const p = PRODUCTS[code]; return { productId: "", productCode: code, structureCode: `${code}.${p.w}×${p.l}`, sku: "", grade: p.grade, productType: "FR", edpCode: "", width: p.w, length: p.l, sqmPerRoll: (p.w / 1000) * p.l, qty, price, unitPrice: price, currency }; };
@@ -179,8 +193,10 @@ const QUOTES = [
   { id: `QT-${yr}-D01`, customerId: "CD-02", projectId: "P-D01", quoteDate: daysAgo(15), validUntil: daysAhead(15), items: [line("TDR330", 600, 7600, "VND")], paymentTerms: "T/T 30 days", revisionNo: 2, status: "Negotiating", approvedBy: "", currency: "VND", pic: "MAI", createdBy: "MAI" },
   { id: `QT-${yr}-D02`, customerId: "CD-03", projectId: "", quoteDate: daysAgo(8), validUntil: daysAhead(22), items: [line("TDW108", 240, 2300, "VND"), line("TDM238", 96, 4200, "VND")], paymentTerms: "T/T 30 days", revisionNo: 1, status: "Sent", approvedBy: "", currency: "VND", pic: "MAI", createdBy: "MAI" },
   { id: `QT-${yr}-D03`, customerId: "CD-10", projectId: "P-D03", quoteDate: daysAgo(45), validUntil: daysAgo(15), items: [line("TDR330", 900, 10.5, "THB")], paymentTerms: "T/T 30 days", revisionNo: 1, status: "Won", approvedBy: "", currency: "THB", pic: "MAI", createdBy: "MAI" },
+  { id: `QT-${yr}-D05`, customerId: "CD-15", projectId: "", quoteDate: daysAgo(5), validUntil: daysAhead(25), items: [line("TDW108", 240, 2300, "VND")], paymentTerms: "T/T 30 days", revisionNo: 1, status: "Sent", approvedBy: "", currency: "VND", pic: "NAM", createdBy: "NAM" },
   { id: `QT-${yr}-D04`, customerId: "CD-11", projectId: "P-D04", quoteDate: daysAgo(2), validUntil: daysAhead(28), items: [line("TDW108", 1200, 3.2, "THB")], paymentTerms: "T/T 30 days", revisionNo: 1, status: "Draft", approvedBy: "", currency: "THB", pic: "MAI", createdBy: "MAI" },
 ];
+QUOTES.forEach((x) => { x.projectId = reProj(x.projectId); });
 await post("quotations", QUOTES.map((x) => row(x.id, x)));
 
 /* ---------- price list (products shard) ---------- */

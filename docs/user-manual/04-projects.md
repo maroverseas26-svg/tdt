@@ -14,6 +14,8 @@
 
 **Ink type** fills itself in from the products you pick.
 
+Each new project gets a code: country, date and number, such as **VN261027-01** or **TL261027-02**.
+
 ### Move a project forward
 
 1. Open the project from the list.
@@ -21,7 +23,7 @@
 3. The change is saved and logged on the customer's timeline.
 4. Click **Edit** to change other details.
 
-![Project detail with the Stage dropdown](img/project-stage.png)
+![Project detail with the project code and the Stage dropdown](img/project-stage.png)
 
 ### Find a project
 

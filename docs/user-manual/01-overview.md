@@ -6,7 +6,7 @@
 
 1. Set the period with the date range in the top bar.
 2. Read the top counters: **Customers**, **In pipeline**, **Active projects**, **Samples**, **Quotations** and **PO conversion**.
-3. Check the value cards: **Total value**, **PO value**, **Project value** and **Forecast value**.
+3. Check the value cards: **Total value**, **PO value**, **Project value** and **Submitted forecast**.
 4. Each value card shows **MTD**, **QTD** and **YTD**, with the change against the last period.
 
 ### Drill into the details
@@ -20,4 +20,5 @@
 **Tips**
 
 - **Upcoming meetings** lists the meetings you logged on customer profiles.
+- **Submitted forecast** counts only forecast rows set to **Submitted** or **Locked** in **Sales Forecast**.
 - Numbers only include the customers you are allowed to see.
