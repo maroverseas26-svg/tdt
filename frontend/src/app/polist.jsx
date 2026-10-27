@@ -320,15 +320,17 @@ function POListPage({ openCustomer, selected, setSelected, presetFromQuote, clea
     list.forEach(p => {
       const c = custMap[p.customerId];
       const code = PO.nameCodeKey(PO.nameCodeOf(c || {})) || p.customerId;
-      const grp = normGrpId((c && c.group) || p.group || "");
-      const key = code + "|" + grp;
+      // One row per Name Code: its companies may sit in different customer groups, the row
+      // shows the representative company's group (the badge edits every member).
+      const key = code;
       (m[key] = m[key] || []).push(p);
     });
     return Object.entries(m).map(([key, arr]) => {
       const memberCustomerIds = [...new Set(arr.map(p => p.customerId))];
       const byCust = {};
       arr.forEach(p => { byCust[p.customerId] = (byCust[p.customerId] || 0) + 1; });
-      const customerId = memberCustomerIds.slice().sort((a, b) => (byCust[b] || 0) - (byCust[a] || 0))[0];
+      const headId = memberCustomerIds.find(id => /head\s*office/i.test((custMap[id] || {}).name || ""));
+      const customerId = headId || memberCustomerIds.slice().sort((a, b) => (byCust[b] || 0) - (byCust[a] || 0))[0];
       const repC = custMap[customerId];
       return {
         key, customerId, memberCustomerIds, companyCount: memberCustomerIds.length,
@@ -589,7 +591,8 @@ function POListPage({ openCustomer, selected, setSelected, presetFromQuote, clea
                         </div>
                       </div>
                     </td>
-                    <td className="hide-sm" onClick={e => e.stopPropagation()}>
+                    {/* the editable badge stops its own clicks; the rest of the cell expands the row */}
+                    <td className="hide-sm">
                       {(canEdit && (canEdit("customers") || canEdit("polist")))
                         ? <GroupTagSelect group={g.group} t={t} onChange={(val) => g.memberCustomerIds.forEach(id => updateCustomer(id, { group: val }, "Customer group → " + (val || "—")))} />
                         : <GroupBadge group={g.group} />}
@@ -821,6 +824,8 @@ function POProfile({ id, onBack, openCustomer }) {
     : [{ productId: (catalogueFor(products, (customers.find(c => c.id === rec.customerId) || {}).country).find(x => x.name === rec.commercial) || {}).id || "", productCode: rec.productCode || "", structureCode: rec.structureCode || "", sku: PO.cleanCode(rec.commercial) || rec.structureCode || "", grade: rec.grade || "", productType: rec.productType || "FR", width: rec.width ?? "", length: rec.length ?? "", sqmPerRoll: rec.sqmPerRoll ?? "", qty: rec.qty ?? "", price: _recPrice(rec, rec.amountVnd, +rec.qty), rollPrice: rec.rollPrice ?? "", edpCode: rec.edpCode || "", tierQty: 0, currency: "VND" }];
   const mergedItems = siblings.flatMap(_buildItems);
   const mergedCodes = [...new Set(mergedItems.map(it => it.structureCode || it.sku).filter(Boolean))];
+  // Delete matches Save: the PO is every record of this PO number for this customer, so a
+  // delete removes all of them (Save already merges them into one).
 
   const startEdit = () => {
     setF({
@@ -894,7 +899,7 @@ function POProfile({ id, onBack, openCustomer }) {
         <div className="profile-status">
           <strong className="cell-money" style={{ fontSize: 20 }}>{PO.fmtMoneyFull(mergedAmount, currency)}</strong>
           {canEdit && !edit && <button className="btn btn-primary btn-sm" onClick={startEdit}>{t("pd_edit")}</button>}
-          {canDel && !edit && <button className="btn btn-danger btn-sm" onClick={() => crmConfirm(t("del_confirm"), () => { deletePORecords([p]); onBack(); })}>{t("pd_delete")}</button>}
+          {canDel && !edit && <button className="btn btn-danger btn-sm" onClick={() => crmConfirm(t("pol_del_po_confirm").replace("{po}", poKey || p.id).replace("{n}", String(mergedItems.length)), () => { deletePORecords(siblings); onBack(); })}>{t("pd_delete")}</button>}
         </div>
       </header>
 
@@ -1016,13 +1021,32 @@ function PODetailModal({ id, onClose, openCustomer }) {
 function POFormModal({ onClose, presetCustomerId, presetFromQuote, asPage }) {
   const { t, user, isBoss, assignablePics, users, scopeCustomers, products, addPO, quotations, pos, repCountry, productCountry } = useApp();
   const today = new Date().toISOString().slice(0, 10);
-  const quoteItem = presetFromQuote && presetFromQuote.items && presetFromQuote.items[0];
-  const quoteProd = quoteItem ? catalogueFor(products, productCountry).find(p => p.code === quoteItem.productCode || p.name === quoteItem.productCode) : null;
+  const quoteItems = (presetFromQuote && presetFromQuote.items) || [];
+  const quoteItem = quoteItems[0];
+  // Every quotation line becomes a PO line. Lines are matched against the price list of the
+  // CUSTOMER's market (the list the line editor shows), structure code first, then the code.
+  const quoteCust = presetFromQuote ? scopeCustomers.find(c => c.id === presetFromQuote.customerId) : null;
+  const quoteCat = presetFromQuote ? catalogueFor(products, (quoteCust && quoteCust.country) || productCountry) : [];
+  const lineFromQuote = (qi) => {
+    const sc = String(qi.structureCode || "").trim();
+    const byStruct = sc ? quoteCat.find(p => structLabel(p) === sc) : null;
+    const prod = byStruct || (!sc ? quoteCat.find(p => p.id === qi.productId) : null)
+      || (variantsForCode(quoteCat, qi.productCode).length === 1 ? variantsForCode(quoteCat, qi.productCode)[0] : null);
+    const code = prod ? pcOf(prod) : (qi.productCode || "");
+    return {
+      productId: prod ? prod.id : "", productCode: code, structureCode: prod ? structLabel(prod) : sc,
+      sku: prod ? structLabel(prod) : (sc || code), grade: (prod && prod.grade) || qi.grade || "", productType: (prod && prod.productType) || qi.productType || "FR",
+      width: qi.width || (prod && prod.width) || "", length: qi.length || (prod && prod.length) || "",
+      sqmPerRoll: qi.sqmPerRoll || (prod && prod.sqmPerRoll) || "", qty: qi.qty || "",
+      price: qi.price != null && qi.price !== "" ? qi.price : (qi.unitPrice || ""), rollPrice: qi.rollPrice || "",
+      edpCode: (prod && prod.itmref) || qi.edpCode || "", currency: qi.currency || "",
+    };
+  };
   const blankItem = { productId: "", productCode: "", structureCode: "", sku: "", grade: "", productType: "FR", width: "", length: "", sqmPerRoll: "", qty: "", price: "", edpCode: "" };
   const [f, setF] = useState({
     customerId: presetFromQuote ? presetFromQuote.customerId : (presetCustomerId || ""),
     group: "E", pic: isBoss ? "" : (user.salesCode || ""),
-    items: quoteItem ? [{ productId: quoteProd ? quoteProd.id : "", productCode: quoteProd ? (quoteProd.code || quoteProd.name) : (quoteItem.productCode || ""), structureCode: quoteItem.structureCode || "", sku: quoteProd ? quoteProd.name : quoteItem.productCode, grade: quoteProd ? quoteProd.grade : "", productType: quoteProd ? (quoteProd.productType || "FR") : "FR", width: quoteItem.width || "", length: quoteItem.length || "", sqmPerRoll: quoteProd ? quoteProd.sqmPerRoll : "", qty: quoteItem.qty || "", price: quoteItem.unitPrice || "", edpCode: quoteProd ? quoteProd.itmref : "" }] : [blankItem],
+    items: quoteItems.length ? quoteItems.map(lineFromQuote) : [blankItem],
     poNumber: "", poDate: today, date: today, invNo: "",
     orderType: "", quoteRef: presetFromQuote ? presetFromQuote.id : "", attachments: [],
   });
@@ -1066,6 +1090,7 @@ function POFormModal({ onClose, presetCustomerId, presetFromQuote, asPage }) {
   const removeAttachment = (i) => set("attachments", f.attachments.filter((_, idx) => idx !== i));
 
   const sqm = lineItemTotals(f.items).sqm;
+  const rollQty = lineItemTotals(f.items).qty;
   const amount = Math.round(lineItemTotals(f.items).value * PO.CURRENCIES[cur].rate);
   const sorted = [...scopeCustomers].sort((a, b) => (a.shortName || a.name).localeCompare(b.shortName || b.name));
   // Ink type(s) auto-derive from the selected SKUs' grade (same as the Projects tab).
@@ -1203,7 +1228,7 @@ function POFormModal({ onClose, presetCustomerId, presetFromQuote, asPage }) {
       </Field>
       <div className="po-calc">
         <span>{t("pol_sqm")}: <strong>{PO.fmtNum(Math.round(sqm))}</strong></span>
-        <span>{t("pol_vnd_roll")}: <strong>{f.qty > 0 && amount ? PO.fmtVND(Math.round(amount / f.qty)) : "—"}</strong></span>
+        <span>{t("pol_vnd_roll")}: <strong>{rollQty !== 0 && amount ? PO.fmtVND(Math.round(amount / rollQty)) : "—"}</strong></span>
         <span>{t("pol_vnd_m2")}: <strong>{sqm > 0 && amount ? PO.fmtVND(Math.round(amount / sqm)) : "—"}</strong></span>
         <span>{t("pol_usd")}: <strong>{amount ? PO.fmtMoneyFull(amount, "USD") : "—"}</strong></span>
       </div>
