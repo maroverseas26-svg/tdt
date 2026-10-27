@@ -36,7 +36,10 @@ const WORKER = (process.env.WORKER_URL || "https://tdt.todaytec.workers.dev").re
 const TOKEN = process.env.MIGRATION_TOKEN;
 const args = process.argv.slice(2);
 const APPLY = args.includes("--apply");
-if (args.some((a) => a !== "--apply" && a !== "--dry-run")) { console.error("usage: merge-duplicate-customers.mjs [--dry-run | --apply]"); process.exit(1); }
+// --exact-names: only groups whose records carry the very same name (case/spacing aside),
+// e.g. to merge a reviewed subset first.
+const EXACT = args.includes("--exact-names");
+if (args.some((a) => a !== "--apply" && a !== "--dry-run" && a !== "--exact-names")) { console.error("usage: merge-duplicate-customers.mjs [--dry-run | --apply] [--exact-names]"); process.exit(1); }
 if (!TOKEN) { console.error("MIGRATION_TOKEN is required"); process.exit(1); }
 const H = { "x-migration-token": TOKEN, "content-type": "application/json" };
 const PAGE = 1000;
@@ -186,6 +189,10 @@ async function main() {
     } else if (byMst.size === 1) {
       groups.push({ key, members: [...byMst.values()][0].concat(noMst) });
     } else groups.push({ key, members: noMst });
+  }
+  if (EXACT) {
+    const exact = (c) => String(c.name || "").trim().toUpperCase().replace(/\s+/g, " ");
+    for (let i = groups.length - 1; i >= 0; i--) if (new Set(groups[i].members.map(exact)).size > 1) groups.splice(i, 1);
   }
   const remap = new Map(merged);
   // ---- linked records (counted before choosing masters) ----
