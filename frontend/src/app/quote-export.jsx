@@ -214,7 +214,7 @@ function QuoteDoc({ d, rows, logoUrl, docRef }) {
   const usd = d.showUsd !== false, cols = usd ? 10 : 9, cut = usd ? 0 : 1;
   const widths = usd ? [7.5, 9.5, 11, 8, 8, 10.5, 8.5, 10, 8.5, 33] : [7.5, 9.5, 11, 8, 8, 10.5, 10, 8.5, 41.5];
   return (
-    <div ref={docRef} className="qx-doc" style={{ width: QX_DOC_WIDTH, boxSizing: "border-box", background: "#fff", color: "#111", fontFamily: "Arial, Helvetica, 'Leelawadee UI', Tahoma, sans-serif", fontSize: 12, padding: 16 }}>
+    <div ref={docRef} className="qx-doc" style={{ width: QX_DOC_WIDTH, boxSizing: "border-box", background: "#fff", color: "#111", fontFamily: "Arial, Helvetica, 'Leelawadee UI', Tahoma, sans-serif", fontSize: 12, letterSpacing: "normal", padding: 16 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
         {logoUrl ? <img src={logoUrl} alt="Todaytec" style={{ height: 54 }} /> : <strong style={{ fontSize: 22 }}>Todaytec</strong>}
         <div style={{ textAlign: "right", lineHeight: 1.45 }}>
@@ -380,6 +380,32 @@ async function qxBuildXlsx(d, rows) {
 }
 
 /* ---------- PDF (rendered from the preview) ---------- */
+// html2canvas draws text word by word, finding words by line-break opportunities. Thai is
+// written without spaces, so a Thai run that wraps onto two lines comes back as one "word"
+// whose box spans both lines, and it is drawn on top of itself. Zero-width spaces between
+// Thai words (Intl.Segmenter; else between Thai letters, keeping marks on their base) give
+// it the break points the browser already used. Only the PDF's copy is changed.
+const QX_THAI = /[\u0E00-\u0E7F]/;
+const QX_THAI_MARK = /[\u0E31\u0E34-\u0E3A\u0E47-\u0E4E]/;
+let qxThaiSeg;
+function qxThaiBreaks(text) {
+  if (qxThaiSeg === undefined) { try { qxThaiSeg = new Intl.Segmenter("th", { granularity: "word" }); } catch (e) { qxThaiSeg = null; } }
+  let out = "", prev = "";
+  const add = (piece) => {
+    // Break only where Thai meets Thai, so Latin text, numbers and "1/2" wrap as before.
+    if (prev && QX_THAI.test(prev.slice(-1)) && QX_THAI.test(piece[0])) out += "\u200B";
+    out += piece; prev = piece;
+  };
+  if (qxThaiSeg) for (const { segment } of qxThaiSeg.segment(text)) add(segment);
+  else for (let i = 0; i < text.length; i++) {
+    if (prev && QX_THAI_MARK.test(text[i])) { out += text[i]; prev += text[i]; } else add(text[i]);
+  }
+  return out;
+}
+function qxThaiBreakNode(root) {
+  const walk = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  for (let n = walk.nextNode(); n; n = walk.nextNode()) if (QX_THAI.test(n.nodeValue)) n.nodeValue = qxThaiBreaks(n.nodeValue);
+}
 // The preview is zoomed to fit its panel, which throws html2canvas' coordinates off, so the
 // PDF is captured from an unzoomed copy pinned to the page's top-left corner.
 async function qxBuildPdf(node) {
@@ -387,12 +413,13 @@ async function qxBuildPdf(node) {
   const holder = document.createElement("div");
   holder.style.cssText = `position:fixed;left:0;top:0;width:${QX_DOC_WIDTH}px;z-index:-1;pointer-events:none`;
   holder.appendChild(node.cloneNode(true));
+  qxThaiBreakNode(holder);
   document.body.appendChild(holder);
   try {
     return await html2pdf().set({
       margin: [6, 6, 6, 6],
       image: { type: "jpeg", quality: 0.92 },
-      html2canvas: { scale: 2, useCORS: true, backgroundColor: "#ffffff", scrollX: 0, scrollY: 0 },
+      html2canvas: { scale: 2, useCORS: true, backgroundColor: "#ffffff", scrollX: 0, scrollY: 0, letterRendering: false },
       jsPDF: { unit: "mm", format: "a4", orientation: "landscape" },
       pagebreak: { mode: ["css", "legacy"], avoid: "tr" },
     }).from(holder.firstChild).outputPdf("blob");
