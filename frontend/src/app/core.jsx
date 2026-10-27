@@ -914,15 +914,44 @@ function AppProvider({ children, tweaks }) {
     updateCustomer(id, { funnel: stage, status }, `Moved to ${stage}`);
   };
 
-  // Time-based, so no two browsers hand out the same id. The old "P-" + count + random scheme
-  // reused numbers and a new project silently overwrote an existing one.
+  // Project code: <CC><YYMMDD>-<NN>, e.g. VN261027-01 — CC from the customer's country (Thailand
+  // is TL), NN a per-country per-day sequence. The next NN comes from the server's copy too
+  // (like freshQuoteNo), so two browsers creating projects the same day don't reuse one: the
+  // old "P-" + count + random scheme did, and a new project silently overwrote an existing one.
+  const PROJECT_CC = { Vietnam: "VN", Thailand: "TL", Indonesia: "ID", Malaysia: "MY" };
+  const projectPrefix = (customerId, country) => {
+    const cust = customerId ? customers.find(c => c.id === customerId) : null;
+    const ctry = C.normCountry((cust && cust.country) || country || "") || C.normCountry(C.kpiCountryOf(user) || "");
+    const d = new Date();
+    const yymmdd = String(d.getFullYear() % 100).padStart(2, "0") + String(d.getMonth() + 1).padStart(2, "0") + String(d.getDate()).padStart(2, "0");
+    return (PROJECT_CC[ctry] || "XX") + yymmdd + "-";
+  };
+  const projectSeq = (id, prefix) => { const m = String(id || "").startsWith(prefix) ? /^(\d+)$/.exec(String(id).slice(prefix.length)) : null; return m ? +m[1] : 0; };
+  // Highest NN in use per prefix, here and on the server. Throws when the server can't be asked.
+  const projectSeqMax = async (prefixes) => {
+    const out = {};
+    for (const pre of [...new Set(prefixes)]) {
+      const r = await fetch(C.SB.url + "/projects?select=id&id=like." + encodeURIComponent(pre + "*"), { cache: "no-store" });
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      const server = (await r.json()).map(x => projectSeq(x.id, pre));
+      out[pre] = Math.max(0, ...server, ...projects.map(x => projectSeq(x.id, pre)));
+    }
+    return out;
+  };
+  const seqId = (pre, n) => pre + String(n).padStart(2, "0");
+  // Fallback when the server is unreachable: time-based, unique without asking anyone.
   const newProjectId = (i = 0) => {
     let id;
     do { id = "P-" + (Date.now() + i++).toString(36).toUpperCase(); } while (projects.some(p => p.id === id));
     return id;
   };
-  const addProject = (p) => {
-    const id = newProjectId();
+  const freshProjectId = async (customerId, country) => {
+    const pre = projectPrefix(customerId, country);
+    try { const max = await projectSeqMax([pre]); return seqId(pre, max[pre] + 1); } catch (e) { return newProjectId(); }
+  };
+  // id: from freshProjectId (the form awaits it); without one, the time-based fallback.
+  const addProject = (p, id) => {
+    id = id || newProjectId();
     const proj = { ...p, id, createdAt: new Date().toISOString().slice(0, 10), _updated: NOW() };
     setProjects([proj, ...projects]);
     syncRows("projects", proj);
@@ -1230,7 +1259,8 @@ function AppProvider({ children, tweaks }) {
   };
 
   // bulk import: Projects. items carry parsed numeric value/pricePerSqm (already currency-converted).
-  const addProjectsBulk = (items) => {
+  // Async: the project codes are allocated against the server (one query per country/day).
+  const addProjectsBulk = async (items) => {
     const r = _custResolver(null, "project-import");
     const recs = items.map((it, i) => {
       const rawName = (it.customerName || "").trim();
@@ -1238,7 +1268,7 @@ function AppProvider({ children, tweaks }) {
       const cust = r.get(rawName, it.country, it.following, i);
       const me = user ? (user.salesCode || user.name) : "?";
       return {
-        id: newProjectId(i),
+        id: projectPrefix(cust.id, cust.country || it.country),
         customerId: cust.id, name: it.name || "(imported)", classification: it.classification || "New project",
         product: it.product || "", ink: it.ink || "Wax", width: it.width || 0, length: it.length || 0,
         qtyRolls: it.qtyRolls || 0, qtySqm: it.qtySqm || 0, pricePerSqm: it.pricePerSqm || 0, value: it.value || 0,
@@ -1253,8 +1283,12 @@ function AppProvider({ children, tweaks }) {
         createdAt: new Date().toISOString().slice(0, 10), _updated: NOW(),
       };
     }).filter(Boolean);
+    // r.get() staged the new customers before this await; projectPrefix already read their country.
+    let max = null;
+    try { max = await projectSeqMax(recs.map(x => x.id)); } catch (e) {}
+    recs.forEach((x, i) => { x.id = max ? seqId(x.id, ++max[x.id]) : newProjectId(i); });
     const created = r.commit();
-    if (recs.length) { setProjects([...recs, ...projects]); syncRows("projects", recs); }
+    if (recs.length) { setProjectsState(cur => { const n = [...recs, ...cur]; C.saveJSON(C.LS.projects, n); return n; }); syncRows("projects", recs); }
     addActivity({ user: user ? (user.salesCode || user.name) : "?", action: "project", target: recs.length + " projects (import)", detail: created + " new customers" });
     return { imported: recs.length, created };
   };
@@ -1801,7 +1835,7 @@ function AppProvider({ children, tweaks }) {
     customers, projects: projectsLive, activity, addActivity,
     user, authReady, isBoss, isCountryMgr, teamCodes, assignableCodes, assignablePics, allSalesCodes, login, logout, updateCustomer, updateStatus, moveToStage, addCustomer, addCustomersBulk, addContactLog,
     logs, addLog, logsFor,
-    addProject, updateProject, scopeCustomers, scopeProjects, canSee, canEdit, canDelete, canExport, permOf, can, lvlOr, hasLevels, tweaks, canonCode,
+    addProject, freshProjectId, updateProject, scopeCustomers, scopeProjects, canSee, canEdit, canDelete, canExport, permOf, can, lvlOr, hasLevels, tweaks, canonCode,
     findOrCreateCustomer,
     deleteCustomer, deleteProject, deleteSample, deleteQuotation, deletePO, deletePORecords,
     deleteCustomers, deleteProjects, deleteSamples, deleteQuotations, deletePOs, deleteProducts, updateCustomers,
@@ -2484,14 +2518,18 @@ function GenericImportModal({ titleKey, hintKey, templateName, fields, onImport,
   const requiredKeys = fields.filter(f => f.required).map(f => f.key);
   const canImport = requiredKeys.every(k => map[k] !== undefined) && dataRows.length > 0;
 
+  const [running, setRunning] = useState(false);
   const runImport = () => {
-    if (!canImport) return;
+    if (!canImport || running) return;
     const val = (r, key) => (map[key] !== undefined ? String(r[map[key]] ?? "").trim() : "");
     // `_row` is the Excel row number (header is row 1) so a caller can report exactly
     // which source rows it rejected, and the modal can hand those rows back as a CSV.
     const items = dataRows.map((r, i) => { const o = { _row: i + 2 }; fields.forEach(f => o[f.key] = val(r, f.key)); return o; });
-    const res = onImport(items, { cur: curEff, curPicked: cur, country }) || { imported: 0, created: 0, skipped: 0 };
-    setReport(res);
+    // onImport may return a promise (project codes are allocated against the server).
+    setRunning(true);
+    Promise.resolve(onImport(items, { cur: curEff, curPicked: cur, country }))
+      .then(res => setReport(res || { imported: 0, created: 0, skipped: 0 }), e => setError(String((e && e.message) || e)))
+      .finally(() => setRunning(false));
   };
 
   // Hand the failing source rows back to the user: their own columns, verbatim, plus a
@@ -2602,7 +2640,7 @@ function GenericImportModal({ titleKey, hintKey, templateName, fields, onImport,
           {!canImport && <p className="import-warn">{t("im_need_name")}</p>}
           <div className="modal-actions">
             <button className="btn btn-ghost" onClick={onClose}>{t("cancel")}</button>
-            <button className="btn btn-primary" disabled={!canImport} onClick={runImport}>{t("im_run")} ({dataRows.length})</button>
+            <button className="btn btn-primary" disabled={!canImport || running} onClick={runImport}>{running ? "…" : t("im_run") + " (" + dataRows.length + ")"}</button>
           </div>
         </div>
       )}

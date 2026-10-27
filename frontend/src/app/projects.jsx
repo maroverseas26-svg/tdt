@@ -333,8 +333,7 @@ function ProjectsPage({ openCustomer, newProjectFor, clearNewProjectFor, selecte
               endCustomer: it.endCustomer, industry: it.industry, competitor: it.competitor, note: it.note,
             };
           }).filter(Boolean);
-          const res = addProjectsBulk(parsed);
-          return { imported: res.imported, created: res.created, skipped: issues.length, issues };
+          return addProjectsBulk(parsed).then(res => ({ imported: res.imported, created: res.created, skipped: issues.length, issues }));
         }} />}
     </div>
   );
@@ -506,7 +505,7 @@ function ProjectDetailModal({ id, onClose, openCustomer }) {
 }
 
 function ProjectFormModal({ presetCustomerId, onClose, presetStage, presetName, onCreated, asPage, existing }) {
-  const { t, user, isBoss, assignablePics, repCountry, scopeCustomers, addProject, updateProject, samples, findOrCreateCustomer, products } = useApp();
+  const { t, user, isBoss, assignablePics, repCountry, scopeCustomers, addProject, freshProjectId, updateProject, samples, findOrCreateCustomer, products } = useApp();
   const blankItem = { productId: "", productCode: "", structureCode: "", sku: "", grade: "", productType: "FR", width: "", length: "", sqmPerRoll: "", qty: "", price: "", edpCode: "" };
   // Rebuild editable line items from a stored project (which only keeps a compact
   // item shape) — backfill productCode / structureCode / EDP from the catalogue.
@@ -557,8 +556,17 @@ function ProjectFormModal({ presetCustomerId, onClose, presetStage, presetName, 
 
   const valid = (f.customerId && f.customerId !== "__new__" && f.name.trim()) ||
     (f.customerId === "__new__" && f.newCustName.trim() && f.name.trim());
-  const submit = () => {
-    if (!valid) return;
+  const [saving, setSaving] = useState(false);
+  const submit = async () => {
+    if (!valid || saving) return;
+    // A new project takes the next free code of its country and day on the server
+    // (VN261027-01, TL261027-02 …), not only in this browser.
+    let newId = null;
+    if (!existing) {
+      setSaving(true);
+      newId = await freshProjectId(f.customerId === "__new__" ? "" : f.customerId, f.customerId === "__new__" ? f.newCustCountry : "");
+      setSaving(false);
+    }
     let customerId = f.customerId;
     if (customerId === "__new__") {
       customerId = findOrCreateCustomer({ name: f.newCustName, country: f.newCustCountry, owner: user.salesCode || "" }, "project");
@@ -585,7 +593,7 @@ function ProjectFormModal({ presetCustomerId, onClose, presetStage, presetName, 
       const p = addProject({
         ...payload,
         createdBy: user.salesCode || user.name, following: f.pic || user.salesCode || user.name,
-      });
+      }, newId);
       if (onCreated) onCreated(p);
     }
     onClose();
@@ -722,7 +730,7 @@ function ProjectFormModal({ presetCustomerId, onClose, presetStage, presetName, 
       </Field>
       <div className="modal-actions">
         <button className="btn btn-ghost" onClick={onClose}>{t("cancel")}</button>
-        <button className="btn btn-primary" disabled={!valid} onClick={submit}>{existing ? t("save") : t("pr_create")}</button>
+        <button className="btn btn-primary" disabled={!valid || saving} onClick={submit}>{saving ? "…" : existing ? t("save") : t("pr_create")}</button>
       </div>
     </>
   );
