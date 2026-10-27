@@ -400,7 +400,7 @@ function AdminPage() {
                   return (
                     <th key={r.id} className={"perm-role" + (r.id === "BOD" ? " perm-role-fixed" : "")}>
                       <div className="perm-role-name">
-                        <input className="input" value={r.name} title={r.name} aria-label={t("ad_role_name")}
+                        <input className="input" value={r.name} title={r.name} size={Math.max(10, r.name.length + 2)} aria-label={t("ad_role_name")}
                           onChange={e => renameRole(r, e.target.value)}
                           onBlur={e => { if (!e.target.value.trim()) renameRole(r, r.id); }} />
                         {!r.fixed && <button className="role-x" title={n ? t("ad_role_in_use").replace("{role}", r.name).replace("{n}", n) : t("ad_remove")} onClick={() => deleteRole(r)}>✕</button>}
