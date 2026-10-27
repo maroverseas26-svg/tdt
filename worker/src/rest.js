@@ -209,18 +209,12 @@ async function remove(env, ctx, url) {
 }
 
 // settings rows only an admin may change: `roles` (the role list behind Permissions) and,
-// inside `quote_templates`, a country's seller company once it has been saved (admins and
-// Quotations-Admin accounts may) — anyone may still make that first save and edit the rest
-// of the templates.
+// inside `quote_templates`, a country's seller company once it has been saved — anyone may
+// still make that first save and edit the rest of the templates.
 const savedCompany = (tpl, market) => {
   const c = tpl && tpl[market] && tpl[market].company;
   return Array.isArray(c) && String(c[0] || "").trim() ? c : null;
 };
-// Same rule as the Send quotation screen: Admin level on Quotations, or (an account written
-// before access levels existed, with no perms) delete rights on Quotations.
-const canFixQuoteCompany = (me) => !!me && (me.perms && typeof me.perms === "object"
-  ? me.perms.quotations === "admin" && (me.modules || []).includes("quotations")
-  : (me.deleteModules || []).includes("quotations"));
 async function guardSettingsWrite(env, ctx, req, text) {
   if (ctx.table !== "settings" || isAdmin(ctx.me)) return;
   if (req.method === "DELETE") throw new HttpError(403, "admin_only");
@@ -229,7 +223,7 @@ async function guardSettingsWrite(env, ctx, req, text) {
   for (const row of Array.isArray(rows) ? rows : [rows]) {
     const id = row && String(row.id);
     if (id === "roles") throw new HttpError(403, "admin_only");
-    if (id !== "quote_templates" || canFixQuoteCompany(ctx.me)) continue;
+    if (id !== "quote_templates") continue;
     const cur = await env.DB.prepare("SELECT data FROM crm_rows WHERE tbl = 'settings' AND id = 'quote_templates'").first("data");
     const saved = cur ? JSON.parse(cur) : null;
     for (const market of Object.keys(saved || {})) {

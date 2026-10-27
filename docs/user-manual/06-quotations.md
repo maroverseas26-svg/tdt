@@ -53,6 +53,6 @@ A customer with several quotations shows as one row. Click it to see them all.
 **Tips**
 
 - Download and email stay disabled until the seller company is saved for that country.
-- Once saved, only an admin or someone with **Admin** level on Quotations can change the seller company. Ask them if it is wrong.
+- Once saved, only an admin can change the seller company. Ask your admin if it is wrong.
 - Your changes on **Send quotation** are kept for the next time you send this quote.
 - When a quote is **Won**, create the PO from it. See **PO List**.
