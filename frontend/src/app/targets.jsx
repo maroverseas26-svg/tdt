@@ -25,12 +25,14 @@ function tgCompact(vnd, cur) {
 function tgPct(r) { return r == null ? "—" : Math.round(r * 100) + "%"; }
 
 function TargetPage() {
-  const { t, isBoss, isCountryMgr, canEdit, assignableCodes, user, users, targets, setTarget, setTargets, targetGroups, setTargetGroup, setTargetGroups, repCountry, pos, currency, setCurrency, updateUser, scopeCustomers, customers } = useApp();
+  const { t, isBoss, isCountryMgr, canEdit, assignableCodes, user, users, targets, setTarget, setTargets, targetGroups, setTargetGroup, setTargetGroups, repCountry, pos, currency, setCurrency, updateUser, scopeCustomers, customers, lvlOr } = useApp();
   const tcCustById = React.useMemo(() => { const m = {}; [...(customers || []), ...(scopeCustomers || [])].forEach(c => { if (c && c.id) m[c.id] = c; }); return m; }, [customers, scopeCustomers]);
   // KPI input is allowed for BOD/Admin (isBoss) OR anyone explicitly granted edit
   // rights on the Target module in Permissions — so a titled "Admin" like Thuy who
   // isn't scope=all can still be given KPI-entry rights.
   const canEditKPI = isBoss || !!(canEdit && canEdit("target"));
+  // Deleting target rows, Import and the More menu need "admin" on Targets (legacy: as before).
+  const canDelKPI = lvlOr("target", "admin", canEditKPI);
   const [year, setYear] = useState("2026");
   const [mode, setMode] = useState("input");
   const [breakdown, setBreakdown] = useState("sales");
@@ -167,9 +169,9 @@ function TargetPage() {
           </div>
         </div>
         <div className="head-actions">
-          {isBoss && <button className="btn btn-ghost" onClick={() => setImporting(true)}><Icon d={ICONS.upload} size={15} /> {t("tg_import")}</button>}
+          {lvlOr("target", "admin", isBoss) && <button className="btn btn-ghost" onClick={() => setImporting(true)}><Icon d={ICONS.upload} size={15} /> {t("tg_import")}</button>}
           <button className="btn btn-ghost" onClick={exportTargets}><Icon d={ICONS.download} size={15} /> {t("tg_export")}</button>
-          {isBoss && <MoreMenu items={[
+          {lvlOr("target", "admin", isBoss) && <MoreMenu items={[
             (yearTargets && Object.keys(yearTargets).length > 0 || (yearGroups && Object.keys(yearGroups).length > 0)) && {
               key: "del", label: t("tg_delete"), icon: ICONS.alert, danger: true,
               onClick: () => crmConfirm(t("tg_delete_confirm").replaceAll("{y}", year), () => {
@@ -220,8 +222,8 @@ function TargetPage() {
         {isBoss && hiddenReps.size > 0 && <button className="btn btn-ghost" onClick={restoreReps}>↺ {t("tg_show_hidden").replace("{n}", hiddenReps.size)}</button>}
       </div>
 
-      {mode === "input" && <TgInputGrouped t={t} year={year} reps={sortedReps} yearGroups={yearGroups} setTargetGroup={setTargetGroup} isBoss={isBoss} canEdit={canEditKPI} repCountry={repCountry} groupFilter={tgGroup} cur={currency} onRemoveRep={removeRep} onMoveRep={moveRepCountry} />}
-      {mode === "bycust" && <TgByCustomer t={t} year={year} canEdit={canEditKPI} reps={sortedReps} custById={tcCustById} picFilter={tgPic} importing={importing} setImporting={setImporting} />}
+      {mode === "input" && <TgInputGrouped t={t} year={year} reps={sortedReps} yearGroups={yearGroups} setTargetGroup={setTargetGroup} isBoss={isBoss} canEdit={canEditKPI} canDel={canDelKPI} repCountry={repCountry} groupFilter={tgGroup} cur={currency} onRemoveRep={removeRep} onMoveRep={moveRepCountry} />}
+      {mode === "bycust" && <TgByCustomer t={t} year={year} canEdit={canEditKPI} canDel={canDelKPI} reps={sortedReps} custById={tcCustById} picFilter={tgPic} importing={importing} setImporting={setImporting} />}
       {mode === "tracking" && <TgTracking t={t} year={year} selMonth={selMonth} reps={sortedReps} yearGroups={yearGroups} actualGroup={actualGroup} aggOK={!!tgAggRows} pos={pos} repCountry={repCountry} groupFilter={tgGroup} cur={currency} isBoss={isBoss} onMoveRep={moveRepCountry} />}
 
       {mode === "input" && (
@@ -708,8 +710,9 @@ function TgGInputCell({ val, canEdit, onCommit, cur }) {
   );
 }
 
-function TgInputGrouped({ t, year, reps, yearGroups, setTargetGroup, isBoss, canEdit, repCountry, groupFilter, cur, onRemoveRep, onMoveRep }) {
+function TgInputGrouped({ t, year, reps, yearGroups, setTargetGroup, isBoss, canEdit, canDel, repCountry, groupFilter, cur, onRemoveRep, onMoveRep }) {
   const canEditCell = canEdit !== undefined ? canEdit : isBoss;
+  const canDelCell = canDel !== undefined ? canDel : canEditCell;
   const groupIds = TG.GROUPS.map(g => g.id).filter(g => !groupFilter || g === groupFilter);
   const sumArr = (arrs) => { const a = Array(12).fill(0); arrs.forEach(x => (x || []).forEach((v, m) => a[m] += v || 0)); return a; };
   const annual = (arr) => (arr || []).reduce((s, v) => s + (v || 0), 0);
@@ -740,7 +743,7 @@ function TgInputGrouped({ t, year, reps, yearGroups, setTargetGroup, isBoss, can
     <div className="card table-card tg-track-card">
       <table className="table tg-track-table" style={{ minWidth: 1052 }}>
         <colgroup>
-          {canEditCell && <col style={{ width: 34 }} />}
+          {canDelCell && <col style={{ width: 34 }} />}
           <col style={{ width: 84 }} />
           <col style={{ width: 150 }} />
           <col style={{ width: 86 }} />
@@ -748,7 +751,7 @@ function TgInputGrouped({ t, year, reps, yearGroups, setTargetGroup, isBoss, can
         </colgroup>
         <thead>
           <tr className="tg-track-h1">
-            {canEditCell && <th rowSpan="2" className="col-check tg-frz"><SelectAllCheck ids={allKeys} selected={sel.selected} toggleAll={sel.toggleAll} /></th>}
+            {canDelCell && <th rowSpan="2" className="col-check tg-frz"><SelectAllCheck ids={allKeys} selected={sel.selected} toggleAll={sel.toggleAll} /></th>}
             <th rowSpan="2" className="tg-track-pic tg-frz">{t("tg_pic")}</th>
             <th rowSpan="2" className="tg-col-group tg-frz">{t("tg_cust_type_group")}</th>
             <th className="tg-c-target tg-col-annual tg-frz">{t("tg_annual") || year}</th>
@@ -769,7 +772,7 @@ function TgInputGrouped({ t, year, reps, yearGroups, setTargetGroup, isBoss, can
                 <React.Fragment key={b.pic}>
                   {b.rows.map((r, i) => (
                     <tr key={r.g} className={sel.isSel(b.pic + "|" + r.g) ? "row-selected" : ""}>
-                      {canEditCell && <td className="col-check tg-frz"><RowCheck id={b.pic + "|" + r.g} selected={sel.selected} toggle={sel.toggle} /></td>}
+                      {canDelCell && <td className="col-check tg-frz"><RowCheck id={b.pic + "|" + r.g} selected={sel.selected} toggle={sel.toggle} /></td>}
                       {i === 0 && <td rowSpan={b.rows.length} className="tg-track-pic tg-frz" draggable={isBoss && !!onMoveRep} onDragStart={e => e.dataTransfer.setData("text/pic", b.pic)} title={isBoss && onMoveRep ? t("tg_drag_hint") : ""} style={isBoss && onMoveRep ? { cursor: "grab" } : null}>
                         <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
                           <OwnerChip code={b.pic} t={t} />
@@ -784,7 +787,7 @@ function TgInputGrouped({ t, year, reps, yearGroups, setTargetGroup, isBoss, can
                     </tr>
                   ))}
                   <tr className="tg-track-total">
-                    {canEditCell && <td className="col-check tg-frz"></td>}
+                    {canDelCell && <td className="col-check tg-frz"></td>}
                     <td className="tg-track-pic tg-frz"></td>
                     <td className="tg-col-group tg-frz"><strong>{b.pic} {t("tg_total")}</strong></td>
                     <td className="cell-money tg-c-target tg-col-annual tg-frz"><strong>{tgCompact(annual(b.totArr), cur)}</strong></td>
@@ -793,7 +796,7 @@ function TgInputGrouped({ t, year, reps, yearGroups, setTargetGroup, isBoss, can
                 </React.Fragment>
               ))}
               <tr className="tg-track-total">
-                <td colSpan={canEditCell ? 3 : 2} className="tg-frz tg-col-grandhead"><strong>{country} {t("tg_total")}</strong></td>
+                <td colSpan={canDelCell ? 3 : 2} className="tg-frz tg-col-grandhead"><strong>{country} {t("tg_total")}</strong></td>
                 <td className="cell-money tg-c-target tg-col-annual tg-frz"><strong>{tgCompact(annual(cGrand), cur)}</strong></td>
                 {cGrand.map((v, m) => <td key={m} className="cell-money tg-c-target">{tgCompact(v, cur)}</td>)}
               </tr>
@@ -801,13 +804,13 @@ function TgInputGrouped({ t, year, reps, yearGroups, setTargetGroup, isBoss, can
             );
           })}
           <tr className="tg-track-grand">
-            <td colSpan={canEditCell ? 3 : 2} className="tg-col-grandhead tg-frz"><strong>{t("tg_local")}</strong></td>
+            <td colSpan={canDelCell ? 3 : 2} className="tg-col-grandhead tg-frz"><strong>{t("tg_local")}</strong></td>
             <td className="cell-money tg-col-annual tg-frz"><strong>{tgCompact(annual(grandArr), cur)}</strong></td>
             {grandArr.map((v, m) => <td key={m} className="cell-money">{tgCompact(v, cur)}</td>)}
           </tr>
         </tbody>
       </table>
-      {canEditCell && <BulkBar count={sel.count} noun={t("tg_target")} allIds={allKeys} onSelectAll={ids => sel.setSelected(new Set(ids))} onDelete={delSel} onClear={sel.clear} />}
+      {canDelCell && <BulkBar count={sel.count} noun={t("tg_target")} allIds={allKeys} onSelectAll={ids => sel.setSelected(new Set(ids))} onDelete={delSel} onClear={sel.clear} />}
     </div>
   );
 }

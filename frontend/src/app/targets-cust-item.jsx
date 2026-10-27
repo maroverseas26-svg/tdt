@@ -31,7 +31,8 @@ function TcCell({ val, canEdit, onCommit, decimals }) {
 }
 
 /* ---- the grid ---- */
-function TgByCustomer({ t, year, canEdit, reps, custById, picFilter, importing, setImporting }) {
+function TgByCustomer({ t, year, canEdit, canDel, reps, custById, picFilter, importing, setImporting }) {
+  const canDelRows = canDel !== undefined ? canDel : canEdit;
   const { targetCust, setTargetCustMonth, setTargetCustField, deleteTargetCustRows, normalizeTargetCustPics, currency } = useApp();
   const [q, setQ] = React.useState("");
   const sel = useRowSelection();
@@ -109,7 +110,7 @@ function TgByCustomer({ t, year, canEdit, reps, custById, picFilter, importing, 
       <div className="card table-card tc-card">
         <table className="table tc-table">
           <colgroup>
-            {canEdit && <col style={{ width: 34 }} />}
+            {canDelRows && <col style={{ width: 34 }} />}
             <col style={{ width: 200 }} />
             <col style={{ width: 96 }} />
             <col style={{ width: 74 }} />
@@ -119,7 +120,7 @@ function TgByCustomer({ t, year, canEdit, reps, custById, picFilter, importing, 
           </colgroup>
           <thead>
             <tr className="tc-h1">
-              {canEdit && <th rowSpan="2" className="col-check tc-frz"><SelectAllCheck ids={allKeys} selected={sel.selected} toggleAll={sel.toggleAll} /></th>}
+              {canDelRows && <th rowSpan="2" className="col-check tc-frz"><SelectAllCheck ids={allKeys} selected={sel.selected} toggleAll={sel.toggleAll} /></th>}
               <th rowSpan="2" className="tc-col-cust tc-frz">{t("cu_company")}</th>
               <th rowSpan="2" className="tc-col-item">{t("tgc_item")}</th>
               <th rowSpan="2" className="tc-col-price">{t("tgc_price")}</th>
@@ -134,7 +135,7 @@ function TgByCustomer({ t, year, canEdit, reps, custById, picFilter, importing, 
           </thead>
           <tbody>
             <tr className="tc-grand">
-              {canEdit && <td className="col-check tc-frz"></td>}
+              {canDelRows && <td className="col-check tc-frz"></td>}
               <td className="tc-col-cust tc-frz"><strong>{t("tg_total")}</strong></td>
               <td className="tc-col-item dim">{groups.length}</td>
               <td className="tc-col-price"></td>
@@ -147,7 +148,7 @@ function TgByCustomer({ t, year, canEdit, reps, custById, picFilter, importing, 
               return (
                 <React.Fragment key={g.cid}>
                   <tr className="tc-row-parent">
-                    {canEdit && <td className="col-check tc-frz"></td>}
+                    {canDelRows && <td className="col-check tc-frz"></td>}
                     <td className="tc-col-cust tc-frz" title={g.full}>
                       <button className="ovp-caret" onClick={() => toggle(g.cid)} aria-expanded={isOpen}>{isOpen ? "▾" : "▸"}</button>
                       {g.label}
@@ -160,7 +161,7 @@ function TgByCustomer({ t, year, canEdit, reps, custById, picFilter, importing, 
                   </tr>
                   {isOpen && g.items.map(it => (
                     <tr key={it.code} className={"tc-row-child" + (sel.isSel(g.cid + "|" + it.code) ? " row-selected" : "")}>
-                      {canEdit && <td className="col-check tc-frz"><RowCheck id={g.cid + "|" + it.code} selected={sel.selected} toggle={sel.toggle} /></td>}
+                      {canDelRows && <td className="col-check tc-frz"><RowCheck id={g.cid + "|" + it.code} selected={sel.selected} toggle={sel.toggle} /></td>}
                       <td className="tc-col-cust tc-frz tc-sub">{it.pic ? <OwnerChip code={it.pic} t={t} /> : <span className="dim">—</span>}</td>
                       <td className="tc-col-item"><strong>{it.code}</strong><small className="cell-sub">{[it.grade, it.cur || "USD"].filter(Boolean).join(" · ")}</small></td>
                       <TcCell val={it.price} canEdit={canEdit} decimals={4}
@@ -176,11 +177,11 @@ function TgByCustomer({ t, year, canEdit, reps, custById, picFilter, importing, 
                 </React.Fragment>
               );
             })}
-            {!groups.length && <tr><td colSpan={canEdit ? 18 : 17} className="empty tc-empty">{t("tgc_no_rows")}</td></tr>}
+            {!groups.length && <tr><td colSpan={canDelRows ? 18 : 17} className="empty tc-empty">{t("tgc_no_rows")}</td></tr>}
           </tbody>
         </table>
       </div>
-      {canEdit && <BulkBar count={sel.count} noun={t("tgc_item")} allIds={allKeys} onSelectAll={ids => sel.setSelected(new Set(ids))} onDelete={delSel} onClear={sel.clear} />}
+      {canDelRows && <BulkBar count={sel.count} noun={t("tgc_item")} allIds={allKeys} onSelectAll={ids => sel.setSelected(new Set(ids))} onDelete={delSel} onClear={sel.clear} />}
       {importing && <TgCustImportModal t={t} year={year} onClose={() => setImporting(false)} />}
     </>
   );

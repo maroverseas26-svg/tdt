@@ -379,7 +379,7 @@ async function qxBuildPdf(node) {
 
 /* ---------- the page ---------- */
 function QuoteSendPage({ q, cust, onClose }) {
-  const { t, user, isBoss, updateQuotation } = useApp();
+  const { t, user, isBoss, lvlOr, updateQuotation } = useApp();
   const docRef = React.useRef(null);
   const previewRef = React.useRef(null);
   const [zoom, setZoom] = React.useState(1);
@@ -618,7 +618,7 @@ function QuoteSendPage({ q, cust, onClose }) {
           ))}
           {d.includeCore && <button className="btn btn-ghost btn-sm" onClick={() => set("core", [...d.core, ["", "", ""]])}>+ {t("qx_add_core")}</button>}
 
-          {isBoss && (
+          {lvlOr("quotations", "admin", isBoss) && (
             <div className="modal-actions">
               <button className="btn btn-ghost" disabled={!!busy} onClick={saveDefault}>{t("qx_save_default").replace("{c}", d.market)}</button>
             </div>

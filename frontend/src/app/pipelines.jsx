@@ -2,7 +2,9 @@
 const PL = window.CRM;
 
 function PipelinesPage({ openCustomer, openProject }) {
-  const { t, isBoss, scopeProjects, scopeCustomers, customers, updateProject, addLog, money, currency, setCurrency, users, samples, quotations } = useApp();
+  const { t, isBoss, scopeProjects, scopeCustomers, customers, updateProject, addLog, money, currency, setCurrency, users, samples, quotations, lvlOr } = useApp();
+  // Moving a card changes the project's stage: needs edit on Pipelines.
+  const canMove = lvlOr("pipelines", "edit", true);
   const [view, setView] = useState("board");
   const [q, setQ] = useState("");
   const [owner, setOwner] = useState("");
@@ -83,7 +85,7 @@ function PipelinesPage({ openCustomer, openProject }) {
   // move a project to a new stage (sets the matching milestone flags, never downgrades flags)
   const moveProject = (id, stage) => {
     const p = scopeProjects.find(x => x.id === id);
-    if (!p || p.stage === stage) return;
+    if (!canMove || !p || p.stage === stage) return;
     const patch = { stage };
     if (stage === "Won") patch.result = "Won";
     if (stage === "Lost") patch.result = "Lost";
@@ -141,8 +143,8 @@ function PipelinesPage({ openCustomer, openProject }) {
               <div className="kcol-body">
                 {byStage[stage].length === 0 && <div className="kcol-empty">{t("pl_empty")}</div>}
                 {byStage[stage].map(p => (
-                  <div key={(p._type || "proj") + "-" + p.id} className={"kcard" + (p._type ? " kcard-" + p._type : "")} draggable={!p._type}
-                    onDragStart={p._type ? undefined : e => e.dataTransfer.setData("text/project-id", p.id)}
+                  <div key={(p._type || "proj") + "-" + p.id} className={"kcard" + (p._type ? " kcard-" + p._type : "")} draggable={!p._type && canMove}
+                    onDragStart={p._type || !canMove ? undefined : e => e.dataTransfer.setData("text/project-id", p.id)}
                     onClick={() => p._type ? openCustomer(p.customerId) : (openProject ? openProject(p.id) : openCustomer(p.customerId))}>
                     <strong>{p.name}{p._type === "sample" ? <span className="kcard-tag">{t("nav_samples")}</span> : p._type === "quote" ? <span className="kcard-tag">{t("nav_quotations") || "Quote"}</span> : null}</strong>
                     <small className="kcard-status">{custName(p.customerId)}{p._type === "sample" && p.sub ? " · " + p.sub : ""}</small>

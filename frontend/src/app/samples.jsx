@@ -22,7 +22,7 @@ function SampleStatusBadge({ status, t }) {
 }
 
 function SamplesPage({ openCustomer, openProject }) {
-  const { t, isBoss, samples, customers, scopeCustomers, scopeProjects, projects, users, canExport, canEdit, canDelete: canDeletePerm, deleteSamples, addSamplesBulk, picFilterCodes } = useApp();
+  const { t, isBoss, samples, customers, scopeCustomers, scopeProjects, projects, users, canExport, canEdit, canDelete: canDeletePerm, lvlOr, deleteSamples, addSamplesBulk, picFilterCodes } = useApp();
   const [q, setQ] = useState("");
   const sel = useRowSelection();
   const grp = useGroupToggle();
@@ -133,8 +133,8 @@ function SamplesPage({ openCustomer, openProject }) {
                 pic: s.pic || "",
               };
             }} />}
-          <button className="btn btn-ghost" onClick={() => setImporting(true)}><Icon d={ICONS.upload} size={15} /> {t("pol_import_excel")}</button>
-          <button className="btn btn-primary" onClick={() => setCreating(true)}><Icon d={ICONS.plus} size={15} /> {t("smp_new")}</button>
+          {lvlOr("samples", "admin", true) && <button className="btn btn-ghost" onClick={() => setImporting(true)}><Icon d={ICONS.upload} size={15} /> {t("pol_import_excel")}</button>}
+          {lvlOr("samples", "edit", true) && <button className="btn btn-primary" onClick={() => setCreating(true)}><Icon d={ICONS.plus} size={15} /> {t("smp_new")}</button>}
         </div>
       </header>
       <div className="list-toolbar">
@@ -475,7 +475,7 @@ function SampleFormShell({ asPage, t, onClose, children, title }) {
 }
 
 function SampleDetailPage({ id, onBack, openCustomer, openProject }) {
-  const { t, samples, customers, projects, scopeProjects, updateSample, deleteSample, canEdit, canDelete } = useApp();
+  const { t, samples, customers, projects, scopeProjects, updateSample, deleteSample, canEdit, canDelete, lvlOr } = useApp();
   const s = samples.find(x => x.id === id);
   // All hooks first — an early return above them changes the hook count and crashes React.
   const [f, setF] = useState({
@@ -540,6 +540,7 @@ function SampleDetailPage({ id, onBack, openCustomer, openProject }) {
         </section>
         <section className="card">
           <h2>{t("smp_test_status")}</h2>
+          <fieldset className="ro-fieldset" disabled={!lvlOr("samples", "edit", true)}>
           <div className="form-grid">
             <Field label={t("smp_test_status")}>
               <select className="select" value={f.testStatus} onChange={e => set("testStatus", e.target.value)}>
@@ -557,9 +558,10 @@ function SampleDetailPage({ id, onBack, openCustomer, openProject }) {
             <ProjectLinkField t={t} customerId={s.customerId} projects={scopeProjects}
               value={f.projectId} onChange={(v) => set("projectId", v)} kind="sample" />
           </div>
-          <div className="modal-actions">
+          {lvlOr("samples", "edit", true) && <div className="modal-actions">
             <button className="btn btn-primary" disabled={!linkValid} onClick={save}>{t("smp_link_save")}</button>
-          </div>
+          </div>}
+          </fieldset>
         </section>
         <LineItemsView items={s.items} t={t} cur={(s.items && s.items[0] && s.items[0].currency) || "VND"} />
       </div>

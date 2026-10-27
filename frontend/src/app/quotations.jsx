@@ -42,7 +42,7 @@ function quoteTotalIn(q, cur) {
 }
 
 function QuotationsPage({ openCustomer, openProject, openPOFromQuote, selected, setSelected }) {
-  const { t, quotations, customers, scopeCustomers, projects, users, money, currency, setCurrency, canExport, canEdit, canDelete: canDeletePerm, deleteQuotations, addQuotationsBulk, picFilterCodes } = useApp();
+  const { t, quotations, customers, scopeCustomers, projects, users, money, currency, setCurrency, canExport, canEdit, canDelete: canDeletePerm, lvlOr, deleteQuotations, addQuotationsBulk, picFilterCodes } = useApp();
   const [q, setQ] = useState("");
   const sel = useRowSelection();
   const grp = useGroupToggle();
@@ -142,8 +142,8 @@ function QuotationsPage({ openCustomer, openProject, openPOFromQuote, selected, 
                 line_items: lineItems,
               };
             }} />}
-          <button className="btn btn-ghost" onClick={() => setImporting(true)}><Icon d={ICONS.upload} size={15} /> {t("pol_import_excel")}</button>
-          <button className="btn btn-primary" onClick={() => setCreating(true)}><Icon d={ICONS.plus} size={15} /> {t("qt_new")}</button>
+          {lvlOr("quotations", "admin", true) && <button className="btn btn-ghost" onClick={() => setImporting(true)}><Icon d={ICONS.upload} size={15} /> {t("pol_import_excel")}</button>}
+          {lvlOr("quotations", "edit", true) && <button className="btn btn-primary" onClick={() => setCreating(true)}><Icon d={ICONS.plus} size={15} /> {t("qt_new")}</button>}
         </div>
       </header>
       <div className="list-toolbar">
@@ -490,7 +490,7 @@ function QuoteFormShell({ asPage, t, onClose, children, title }) {
 }
 
 function QuotationDetailPage({ id, onBack, openCustomer, openProject, openPOFromQuote }) {
-  const { t, quotations, customers, projects, scopeProjects, updateQuotation, money, currency, isBoss, assignablePics, repCountry, deleteQuotation, canEdit, canDelete, products } = useApp();
+  const { t, quotations, customers, projects, scopeProjects, updateQuotation, money, currency, isBoss, assignablePics, repCountry, deleteQuotation, canEdit, canDelete, lvlOr, products } = useApp();
   const q = quotations.find(x => x.id === id);
   // All hooks first — an early return above them changes the hook count and crashes React.
   const [fullEdit, setFullEdit] = useState(false);
@@ -519,12 +519,12 @@ function QuotationDetailPage({ id, onBack, openCustomer, openProject, openPOFrom
             <h1>{t("qt_detail")} · {q.id}</h1>
             <div className="profile-tags">
               <QuoteStatusBadge status={q.status} t={t} />
-              <select className="select" value={q.status} onChange={e => setStatus(e.target.value)} style={{ maxWidth: 170 }}>
+              <select className="select" value={q.status} disabled={!lvlOr("quotations", "edit", true)} onChange={e => setStatus(e.target.value)} style={{ maxWidth: 170 }}>
                 {QT.QUOTE_STATUSES.map(s => <option key={s} value={s}>{t("qt_status_" + s)}</option>)}
               </select>
               {cust && <button className="link-btn" onClick={() => openCustomer(q.customerId)}>{cust.shortName || cust.name} →</button>}
               {proj && openProject && <button className="link-btn" onClick={() => openProject(q.projectId)}>{proj.name} →</button>}
-              <button className="btn btn-primary btn-sm" onClick={() => setSending(true)}>{t("qx_send")}</button>
+              {lvlOr("quotations", "edit", true) && <button className="btn btn-primary btn-sm" onClick={() => setSending(true)}>{t("qx_send")}</button>}
             </div>
           </div>
         </div>
@@ -534,7 +534,7 @@ function QuotationDetailPage({ id, onBack, openCustomer, openProject, openPOFrom
         <div className="card" style={{ borderColor: "#16A34A", background: "#16A34A0D", marginBottom: 12 }}>
           <p style={{ margin: 0 }}>
             {t("qt_create_po")}
-            {openPOFromQuote && <button className="btn btn-primary btn-sm" style={{ marginLeft: 10 }}
+            {openPOFromQuote && lvlOr("polist", "edit", true) && <button className="btn btn-primary btn-sm" style={{ marginLeft: 10 }}
               onClick={() => { onBack(); openPOFromQuote(q); }}>
               <Icon d={ICONS.plus} size={13} /> {t("pol_new")}
             </button>}
@@ -555,13 +555,13 @@ function QuotationDetailPage({ id, onBack, openCustomer, openProject, openPOFrom
         </section>
         <section className="card">
           <h2>{t("link_project")}</h2>
-          <div className="form-grid">
+          <fieldset className="form-grid ro-fieldset" disabled={!lvlOr("quotations", "edit", true)}>
             <ProjectLinkField t={t} customerId={q.customerId} projects={scopeProjects}
               value={linkProj} onChange={setLinkProj} kind="quote" />
-          </div>
-          <div className="modal-actions">
+          </fieldset>
+          {lvlOr("quotations", "edit", true) && <div className="modal-actions">
             <button className="btn btn-primary" onClick={saveLink}>{t("smp_link_save")}</button>
-          </div>
+          </div>}
         </section>
       </div>
 

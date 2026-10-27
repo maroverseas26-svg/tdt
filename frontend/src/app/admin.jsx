@@ -1,33 +1,76 @@
 // Todaytec CRM — Accounts & Permissions (custom roles, photo, rename)
 const AD = window.CRM;
 
-// Modules are granted per ROLE: a role's `modules` list is the source of truth. Each
-// account still carries its own `modules` copy (the nav gates and the Worker's isAdmin read
-// it), so every role edit is written through to that role's accounts.
+// Access is granted per ROLE: role.perms = { module: "view" | "edit" | "admin" } is the
+// source of truth (a missing key = no access). Each account still carries a copy — `modules`
+// (modules at view or above; the nav gates and the Worker's isAdmin read it) and `perms` — so
+// every role edit is written through to that role's accounts.
 const AD_TEAM_MODULES = AD.MODULES.filter(m => m !== "admin");
+const AD_LEVELS = AD.PERM_LEVELS; // ["none", "view", "edit", "admin"]
 const adNormMods = (mods) => AD.MODULES.filter(m => (mods || []).includes(m));
 const adSameMods = (a, b) => adNormMods(a).join(",") === adNormMods(b).join(",");
-// An all-data role is full access by definition (the app treats it as Admin), so it gets
-// every module; any other role can never hold "admin".
-const adRoleMods = (r) => !r ? [] : r.scope === "all" ? [...AD.MODULES]
-  : adNormMods(r.modules || AD_TEAM_MODULES).filter(m => m !== "admin");
+const adFullPerms = () => Object.fromEntries(AD.MODULES.map(m => [m, "admin"]));
+const adPermsKey = (p) => AD.MODULES.map(m => (p && p[m]) || "none").join(",");
+// An all-data role is full access by definition (the app treats it as Admin); any other role
+// can never hold the Permissions module.
+function adRolePerms(r) {
+  if (!r) return {};
+  if (r.scope === "all") return adFullPerms();
+  const src = r.perms && typeof r.perms === "object" ? r.perms
+    : Object.fromEntries(adNormMods(r.modules || AD_TEAM_MODULES).map(m => [m, "edit"]));
+  const out = {};
+  AD_TEAM_MODULES.forEach(m => { if (src[m] && src[m] !== "none" && AD_LEVELS.includes(src[m])) out[m] = src[m]; });
+  return out;
+}
+const adRoleMods = (r) => { const p = adRolePerms(r); return AD.MODULES.filter(m => p[m]); };
 const adRoleLocked = (r) => r.id === "BOD" || r.scope === "all";
+const adHasPerms = (r) => !!(r && r.perms && typeof r.perms === "object");
+// An account's current levels: its perms copy, or (written before levels existed) its old flags.
+function adUserPerms(u) {
+  const out = {};
+  AD.MODULES.forEach(m => { const l = AD.permOf(u, m, false); if (l !== "none") out[m] = l; });
+  return out;
+}
+// Most common value; a tie keeps the one listed later in `order` (wider access), so nobody's
+// access is narrowed by default.
+function adMostCommon(values, order) {
+  const counts = new Map();
+  values.forEach(v => counts.set(v, (counts.get(v) || 0) + 1));
+  const best = [...counts.entries()].sort((a, b) => b[1] - a[1] || order(b[0]) - order(a[0]))[0];
+  return { value: best ? best[0] : null, mixed: counts.size > 1 };
+}
 
-// First run of the role-based model: give every role that has no module list yet the set
-// its accounts already use (the most common one when they differ). Accounts are not touched.
-function adDeriveRoleModules(roles, users) {
+// Migration to role levels: a role with no `perms` yet takes, per module it grants, the level
+// its accounts have today (all can delete -> admin, can edit -> edit, else view; the most
+// common one when they differ, flagged). Roles with no module list take their accounts'
+// module set first. Accounts are not touched.
+function adDeriveRoles(roles, users) {
   let changed = false;
   const next = roles.map(r => {
-    if (Array.isArray(r.modules)) return r;
+    if (adHasPerms(r)) return r;
     changed = true;
-    if (r.scope === "all") return { ...r, modules: [...AD.MODULES] };
+    if (r.scope === "all") return { ...r, modules: [...AD.MODULES], perms: adFullPerms() };
     const members = users.filter(u => u.role === r.id && !u._deleted);
-    if (!members.length) return { ...r, modules: [...AD_TEAM_MODULES] };
-    const counts = new Map();
-    members.forEach(u => { const k = adNormMods(u.modules).filter(m => m !== "admin").join(","); counts.set(k, (counts.get(k) || 0) + 1); });
-    // most common set; a tie keeps the larger set so nobody's access is narrowed by default
-    const [best] = [...counts.entries()].sort((a, b) => b[1] - a[1] || b[0].split(",").length - a[0].split(",").length)[0];
-    return { ...r, modules: best ? best.split(",") : [], ...(counts.size > 1 ? { modulesMixed: true } : {}) };
+    let mods = Array.isArray(r.modules) ? adNormMods(r.modules).filter(m => m !== "admin") : null;
+    let modulesMixed = !!r.modulesMixed;
+    if (!mods) {
+      if (!members.length) mods = [...AD_TEAM_MODULES];
+      else {
+        const pick = adMostCommon(members.map(u => adNormMods(u.modules).filter(m => m !== "admin").join(",")), k => k.split(",").length);
+        mods = pick.value ? pick.value.split(",") : [];
+        modulesMixed = modulesMixed || pick.mixed;
+      }
+    }
+    const perms = {}, permsMixed = [];
+    mods.forEach(m => {
+      const levels = members.filter(u => (u.modules || []).includes(m)).map(u => AD.permOf(u, m, false));
+      if (!levels.length) { perms[m] = "edit"; return; }
+      const pick = adMostCommon(levels, AD.permRank);
+      perms[m] = pick.value;
+      if (pick.mixed) permsMixed.push(m);
+    });
+    const { modulesMixed: _mm, permsMixed: _pm, ...rest } = r;
+    return { ...rest, modules: mods, perms, ...(modulesMixed ? { modulesMixed: true } : {}), ...(permsMixed.length ? { permsMixed } : {}) };
   });
   return changed ? next : null;
 }
@@ -59,7 +102,7 @@ function AdminPage() {
     const live = users.filter(u => !u._deleted);
     const extras = rolesRemote === "loaded" ? rolesLocalOnly.filter(r => live.some(u => u.role === r.id)) : [];
     const base = extras.length ? [...roles, ...extras] : roles;
-    const next = adDeriveRoleModules(base, users) || base;
+    const next = adDeriveRoles(base, users) || base;
     if (rolesRemote === "missing") setRoles(next, { all: true });
     else if (next !== roles) setRoles(next);
   }, [isBoss, usersSynced, rolesRemote]);
@@ -84,38 +127,51 @@ function AdminPage() {
   const updateRole = (rid, p) => setRoles(roles.map(r => r.id === rid ? { ...r, ...p } : r));
   const allScopeAdmins = (exceptRoleId) => live.filter(u => u.active && u.role !== exceptRoleId && roleOf(u).scope === "all").length;
 
-  // Toggling a module adds/removes just that module on every account of the role, so an
-  // account that still differs (see the notice) keeps its other differences until confirmed.
-  const toggleRoleModule = (r, m) => {
-    if (adRoleLocked(r) || m === "admin") return;
-    const cur = adRoleMods(r);
-    const on = !cur.includes(m);
-    const mods = on ? adNormMods([...cur, m]) : cur.filter(x => x !== m);
-    const { modulesMixed, ...rest } = r;
-    setRoles(roles.map(x => x.id === r.id ? { ...rest, modules: mods } : x));
-    const next = users.map(u => {
+  // Writes a role's new levels through to its accounts. Only the `touched` modules change
+  // on each account, so an account that still differs elsewhere (see the notice) keeps that
+  // until confirmed — but it now carries `perms`, i.e. it is on role levels from here on.
+  const applyRolePerms = (r, perms, touched) => {
+    const { modulesMixed, permsMixed, ...rest } = r;
+    const pm = (permsMixed || []).filter(m => !touched.includes(m));
+    const nr = { ...rest, perms, modules: AD.MODULES.filter(m => perms[m]), ...(modulesMixed ? { modulesMixed } : {}), ...(pm.length ? { permsMixed: pm } : {}) };
+    setRoles(roles.map(x => x.id === r.id ? nr : x));
+    commitUsers(users.map(u => {
       if (u.role !== r.id || u._deleted) return u;
-      const has = (u.modules || []).includes(m);
-      if (has === on) return u;
-      return { ...u, modules: on ? adNormMods([...(u.modules || []), m]) : (u.modules || []).filter(x => x !== m) };
-    });
-    commitUsers(next);
+      const up = adUserPerms(u);
+      touched.forEach(m => { if (perms[m]) up[m] = perms[m]; else delete up[m]; });
+      const mods = AD.MODULES.filter(m => up[m]);
+      if (u.perms && adPermsKey(u.perms) === adPermsKey(up) && adSameMods(u.modules, mods)) return u;
+      return { ...u, perms: up, modules: mods };
+    }));
+  };
+  const setRoleLevel = (r, m, level) => {
+    if (adRoleLocked(r) || m === "admin") return;
+    const perms = { ...adRolePerms(r) };
+    if (level === "none") delete perms[m]; else perms[m] = level;
+    applyRolePerms(r, perms, [m]);
+  };
+  const setRoleAll = (r, level) => {
+    if (adRoleLocked(r) || !level) return;
+    const perms = level === "none" ? {} : Object.fromEntries(AD_TEAM_MODULES.map(m => [m, level]));
+    applyRolePerms(r, perms, AD_TEAM_MODULES);
   };
   const changeRoleScope = (r, scope) => {
     if (r.id === "BOD" || scope === r.scope) return;
     const members = membersOf(r.id);
     if (r.scope === "all" && scope !== "all" && members.some(u => u.active) && allScopeAdmins(r.id) < 1) { window.alert(t("ad_need_admin")); return; }
     if (scope === "all" && members.length && !window.confirm(t("ad_scope_all_confirm").replace("{n}", members.length))) return;
-    const nr = { ...r, scope, modules: scope === "all" ? [...AD.MODULES] : adRoleMods(r).filter(m => m !== "admin") };
+    const base = adRolePerms(r);
+    const nr = { ...r, scope };
+    nr.perms = scope === "all" ? adFullPerms() : Object.fromEntries(Object.entries(base).filter(([m]) => m !== "admin"));
+    nr.modules = AD.MODULES.filter(m => nr.perms[m]);
     setRoles(roles.map(x => x.id === r.id ? nr : x));
-    const mods = adRoleMods(nr);
-    const next = users.map(u => {
+    const perms = adRolePerms(nr), mods = adRoleMods(nr);
+    commitUsers(users.map(u => {
       if (u.role !== r.id || u._deleted) return u;
       // all-data roles must see every country; leaving it falls back to one market
       const cs = scope === "all" ? ["*"] : (u.countries || []).includes("*") ? ["Thailand"] : u.countries;
-      return { ...u, modules: mods, countries: cs };
-    });
-    commitUsers(next);
+      return { ...u, modules: mods, perms, countries: cs };
+    }));
   };
   const renameRole = (r, name) => updateRole(r.id, { name });
   const deleteRole = (r) => {
@@ -126,29 +182,17 @@ function AdminPage() {
     setRoles(roles.filter(x => x.id !== r.id));
   };
 
-  // Moving an account to another role gives it that role's modules.
+  // Moving an account to another role gives it that role's levels.
   const changeUserRole = (u, roleId) => {
     const r = roles.find(x => x.id === roleId);
     if (!r) return;
     const wasAdmin = roleOf(u).scope === "all";
     if (wasAdmin && r.scope !== "all" && u.active && allScopeAdmins(null) <= 1) { window.alert(t("ad_need_admin")); return; }
-    const p = { role: roleId, modules: adRoleMods(r) };
+    const p = { role: roleId, modules: adRoleMods(r), perms: adRolePerms(r) };
     p.countries = r.scope === "all" ? ["*"] : (u.countries || []).includes("*") ? ["Thailand"] : u.countries;
     patch(u.id, p);
   };
 
-  const toggleEditModule = (u, m) => {
-    const cur = u.editModules || u.modules || [];
-    patch(u.id, { editModules: cur.includes(m) ? cur.filter(x => x !== m) : [...cur, m] });
-  };
-  const toggleDeleteModule = (u, m) => {
-    const cur = u.deleteModules || u.editModules || u.modules || [];
-    patch(u.id, { deleteModules: cur.includes(m) ? cur.filter(x => x !== m) : [...cur, m] });
-  };
-  const toggleExportModule = (u, m) => {
-    const cur = u.exportModules || u.modules || [];
-    patch(u.id, { exportModules: cur.includes(m) ? cur.filter(x => x !== m) : [...cur, m] });
-  };
   const toggleCountry = (u, c) => {
     let cs = u.countries || [];
     if (c === "*") { cs = cs.includes("*") ? [] : ["*"]; }
@@ -168,18 +212,22 @@ function AdminPage() {
     if (selUserId === id) setSelUserId(null);
   };
 
-  // Accounts whose own module list differs from their role's (legacy per-account grants).
-  const drift = roles.filter(r => Array.isArray(r.modules) || r.scope === "all").flatMap(r => membersOf(r.id)
-    .filter(u => !adSameMods(u.modules, adRoleMods(r)))
-    .map(u => {
-      const want = adRoleMods(r), have = adNormMods(u.modules);
-      return { u, r, add: want.filter(m => !have.includes(m)), drop: have.filter(m => !want.includes(m)) };
-    }));
+  // Accounts not yet on their role's levels: a different module list or level, or no `perms`
+  // copy yet (still on the old per-account flags). `changes` is what Apply would change.
+  const drift = roles.filter(r => adHasPerms(r) || r.scope === "all").flatMap(r => membersOf(r.id).map(u => {
+    const want = adRolePerms(r), have = adUserPerms(u);
+    const changes = AD.MODULES.filter(m => (want[m] || "none") !== (have[m] || "none")).map(m => ({ m, from: have[m] || "none", to: want[m] || "none" }));
+    if (!changes.length && (r.scope === "all" || (u.perms && adPermsKey(u.perms) === adPermsKey(want))) && adSameMods(u.modules, adRoleMods(r))) return null;
+    return { u, r, changes };
+  }).filter(Boolean));
+  const driftChanged = drift.filter(d => d.changes.length);
+  const driftQuiet = drift.length - driftChanged.length;
   const applyDrift = () => {
-    const fix = new Map(drift.map(d => [d.u.id, adRoleMods(d.r)]));
-    setRoles(roles.map(r => { const { modulesMixed, ...rest } = r; return rest; }));
-    commitUsers(users.map(u => fix.has(u.id) ? { ...u, modules: fix.get(u.id) } : u));
+    const fix = new Map(drift.map(d => [d.u.id, d.r]));
+    setRoles(roles.map(r => { const { modulesMixed, permsMixed, ...rest } = r; return rest; }));
+    commitUsers(users.map(u => fix.has(u.id) ? { ...u, modules: adRoleMods(fix.get(u.id)), perms: adRolePerms(fix.get(u.id)) } : u));
   };
+  const lvLabel = (l) => t("lv_" + (l || "none"));
 
   const scopeShort = (s) => s === "all" ? t("scope_all_s") : s === "country" ? t("scope_country_s") : t("scope_own_s");
   const rolesBadge = rolesSave === "error" ? <span className="perm-save perm-save-error" role="status">{t("ad_roles_save_failed")}</span>
@@ -236,52 +284,14 @@ function AdminPage() {
           </div>
           <div className="admin-section-head">{t("ad_sec_ops")}</div>
           <div className="admin-ctl admin-ctl-wide">
-            <label>{t("ad_modules")} · <span style={{textTransform:"none",fontWeight:400}}>{t("ad_view_perms")}</span></label>
+            <label>{t("ad_levels")}</label>
             <div className="chip-row">
-              {AD.MODULES.map(m => (
-                <span key={m} className={"chip chip-static" + ((u.modules || []).includes(m) ? " on" : "")}>{t("nav_" + m)}</span>
-              ))}
-            </div>
-            <small className="status-hint">{t("ad_modules_from_role").replace("{role}", role.name)}</small>
-          </div>
-          <div className="admin-ctl admin-ctl-wide">
-            <label>{t("ad_edit_perms")}</label>
-            <div className="chip-row">
-              {AD_TEAM_MODULES.map(m => {
-                const editable = (u.editModules || u.modules || []).includes(m);
-                return (
-                  <button key={m} className={"chip" + (editable ? " on" : "")}
-                    disabled={role.scope === "all" || !(u.modules || []).includes(m)}
-                    onClick={() => toggleEditModule(u, m)}>{t("nav_" + m)}</button>
-                );
+              {AD.MODULES.map(m => {
+                const lv = AD.permOf(u, m, role.scope === "all");
+                return <span key={m} className={"chip chip-static perm-chip perm-lv-" + lv}>{t("nav_" + m)} · {lvLabel(lv)}</span>;
               })}
             </div>
-          </div>
-          <div className="admin-ctl admin-ctl-wide">
-            <label>{t("ad_delete_perms")}</label>
-            <div className="chip-row">
-              {AD_TEAM_MODULES.map(m => {
-                const deletable = (u.deleteModules || u.editModules || u.modules || []).includes(m);
-                return (
-                  <button key={m} className={"chip" + (deletable ? " on" : "")}
-                    disabled={role.scope === "all" || !(u.modules || []).includes(m)}
-                    onClick={() => toggleDeleteModule(u, m)}>{t("nav_" + m)}</button>
-                );
-              })}
-            </div>
-          </div>
-          <div className="admin-ctl admin-ctl-wide">
-            <label>{t("ad_export_perms")}</label>
-            <div className="chip-row">
-              {AD_TEAM_MODULES.map(m => {
-                const exportable = (u.exportModules || u.modules || []).includes(m);
-                return (
-                  <button key={m} className={"chip" + (exportable ? " on" : "")}
-                    disabled={role.scope === "all" || !(u.modules || []).includes(m)}
-                    onClick={() => toggleExportModule(u, m)}>{t("nav_" + m)}</button>
-                );
-              })}
-            </div>
+            <small className="status-hint">{t("ad_modules_from_role").replace("{role}", role.name)}{!u.perms && role.scope !== "all" ? " " + t("ad_levels_legacy") : ""}</small>
           </div>
           <React.Fragment>
               <div className="admin-section-head">{t("ad_sec_kpi")}</div>
@@ -372,14 +382,18 @@ function AdminPage() {
           </div>
           <p>{t("ad_drift_hint")}</p>
           <ul>
-            {drift.map(({ u, r, add, drop }) => (
+            {driftChanged.map(({ u, r, changes }) => (
               <li key={u.id}>
                 <strong>{u.name}</strong> <span className="perm-drift-role">{r.name}</span>
-                {add.length > 0 && <span className="perm-drift-add">+ {add.map(m => t("nav_" + m)).join(", ")}</span>}
-                {drop.length > 0 && <span className="perm-drift-drop">− {drop.map(m => t("nav_" + m)).join(", ")}</span>}
+                {changes.map(({ m, from, to }) => (
+                  <span key={m} className={"perm-drift-chg " + (AD.permRank(to) > AD.permRank(from) ? "perm-drift-add" : "perm-drift-drop")}>
+                    {t("nav_" + m)}: {lvLabel(from)} → {lvLabel(to)}
+                  </span>
+                ))}
               </li>
             ))}
           </ul>
+          {driftQuiet > 0 && <p className="perm-drift-quiet">{t("ad_drift_quiet").replace("{n}", driftQuiet)}</p>}
         </div>
       )}
 
@@ -405,7 +419,14 @@ function AdminPage() {
                           onBlur={e => { if (!e.target.value.trim()) renameRole(r, r.id); }} />
                         {!r.fixed && <button className="role-x" title={n ? t("ad_role_in_use").replace("{role}", r.name).replace("{n}", n) : t("ad_remove")} onClick={() => deleteRole(r)}>✕</button>}
                       </div>
-                      <small>{t("ad_role_accounts").replace("{n}", n)}{r.modulesMixed ? " · " + t("ad_role_mixed") : ""}</small>
+                      <small>{t("ad_role_accounts").replace("{n}", n)}{r.modulesMixed || (r.permsMixed || []).length ? " · " + t("ad_role_mixed") : ""}</small>
+                      {!adRoleLocked(r) && (
+                        <select className="select perm-setall" value="" aria-label={r.name + " · " + t("ad_set_all")} disabled={save && save.state === "saving"}
+                          onChange={e => { const v = e.target.value; e.target.value = ""; setRoleAll(r, v); }}>
+                          <option value="">{t("ad_set_all")}</option>
+                          {AD_LEVELS.map(l => <option key={l} value={l}>{lvLabel(l)}</option>)}
+                        </select>
+                      )}
                     </th>
                   );
                 })}
@@ -433,13 +454,17 @@ function AdminPage() {
                   <th>{t("nav_" + m)}</th>
                   {roles.map(r => {
                     const locked = adRoleLocked(r) || m === "admin";
-                    const on = adRoleMods(r).includes(m);
+                    const lv = adRolePerms(r)[m] || "none";
+                    const mixed = (r.permsMixed || []).includes(m);
                     return (
                       <td key={r.id} className={locked ? "perm-locked" : ""}>
-                        <input type="checkbox" checked={on} disabled={locked || (save && save.state === "saving")}
+                        <select className={"perm-lv perm-lv-" + lv} value={lv} disabled={locked || (save && save.state === "saving")}
                           aria-label={r.name + " · " + t("nav_" + m)}
-                          title={locked ? (m === "admin" && !adRoleLocked(r) ? t("ad_admin_mod_hint") : t("ad_locked_hint")) : undefined}
-                          onChange={() => toggleRoleModule(r, m)} />
+                          title={locked ? (m === "admin" && !adRoleLocked(r) ? t("ad_admin_mod_hint") : t("ad_locked_hint")) : mixed ? t("ad_level_mixed") : undefined}
+                          onChange={e => setRoleLevel(r, m, e.target.value)}>
+                          {(m === "admin" ? ["none", "admin"] : AD_LEVELS).map(l => <option key={l} value={l}>{lvLabel(l)}</option>)}
+                        </select>
+                        {mixed && <span className="perm-mixed-dot" title={t("ad_level_mixed")}>•</span>}
                       </td>
                     );
                   })}
@@ -551,7 +576,7 @@ function AddRoleModal({ onClose }) {
   const valid = name.trim().length >= 2 && !roles.some(r => r.name.toLowerCase() === name.trim().toLowerCase());
   const submit = () => {
     if (!valid) return;
-    setRoles([...roles, { id: "R" + Date.now().toString(36), name: name.trim(), scope, modules: scope === "all" ? [...AD.MODULES] : [...AD_TEAM_MODULES] }]);
+    setRoles([...roles, { id: "R" + Date.now().toString(36), name: name.trim(), scope, modules: scope === "all" ? [...AD.MODULES] : [...AD_TEAM_MODULES], perms: scope === "all" ? adFullPerms() : Object.fromEntries(AD_TEAM_MODULES.map(m => [m, "edit"])) }]);
     onClose();
   };
   return (
@@ -597,8 +622,8 @@ function AddUserModal({ onClose, countries }) {
       id: "u-" + Date.now(), name: name.trim(), role: roleId, email: emailNew.trim(), password: "todaytec",
       salesCode: (code.trim() || name.trim()).toUpperCase(),
       countries: role.scope === "all" ? ["*"] : [country],
-      // a new account gets its role's modules
-      modules: adRoleMods(role),
+      // a new account gets its role's levels
+      modules: adRoleMods(role), perms: adRolePerms(role),
       active: true, loginCard: true,
     };
     // Latest-wins: an email uniquely identifies one account. Drop every existing record

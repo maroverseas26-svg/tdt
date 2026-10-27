@@ -2,7 +2,7 @@
 const PD = window.CRM;
 
 function ProductsPage() {
-  const { t, isBoss, products, addProduct, updateProductItem, deleteProduct, deleteProducts, replaceProducts, canEdit, canExport, canDelete: canDeletePerm, pos, currency, setCurrency, productCountry } = useApp();
+  const { t, isBoss, products, addProduct, updateProductItem, deleteProduct, deleteProducts, replaceProducts, canEdit, canExport, canDelete: canDeletePerm, lvlOr, pos, currency, setCurrency, productCountry } = useApp();
   const [q, setQ] = useState("");
   // Country comes from ONE place: the topbar filter (productCountry). No second dropdown
   // here that could disagree with it.
@@ -132,8 +132,8 @@ function ProductsPage() {
                 currency: p.currency || "VND",
               };
             }} />}
-          <button className="btn btn-ghost" onClick={() => setImporting(true)}><Icon d={ICONS.upload} size={15} /> {t("pd_import_excel")}</button>
-          <button className="btn btn-primary" onClick={() => setEditing("new")}><Icon d={ICONS.plus} size={15} /> {t("pd_new")}</button>
+          {lvlOr("products", "admin", true) && <button className="btn btn-ghost" onClick={() => setImporting(true)}><Icon d={ICONS.upload} size={15} /> {t("pd_import_excel")}</button>}
+          {lvlOr("products", "edit", true) && <button className="btn btn-primary" onClick={() => setEditing("new")}><Icon d={ICONS.plus} size={15} /> {t("pd_new")}</button>}
         </div>
       </header>
       <div className="list-toolbar">
@@ -211,9 +211,9 @@ function ProductsPage() {
                     <td className="hide-sm">{p.width && p.length ? `${p.width}×${p.length}` : <span className="dim">—</span>}
                       {p.sqmPerRoll !== "" && p.sqmPerRoll !== undefined && <small className="cell-sub">{p.sqmPerRoll} sqm{p.moq ? " · MOQ " + PD.fmtNum(p.moq) : ""}</small>}</td>
                     <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
-                      <button className="btn btn-ghost btn-sm" onClick={() => setEditing(p.id)}>{t("pd_edit")}</button>{" "}
-                      <button className="btn btn-danger btn-sm" disabled={usedCount(p) > 0} title={usedCount(p) > 0 ? t("pd_in_use") : ""}
-                        onClick={() => setConfirmDel(p)}>{t("pd_delete")}</button>
+                      {lvlOr("products", "edit", true) && <button className="btn btn-ghost btn-sm" onClick={() => setEditing(p.id)}>{t("pd_edit")}</button>}{" "}
+                      {lvlOr("products", "admin", true) && <button className="btn btn-danger btn-sm" disabled={usedCount(p) > 0} title={usedCount(p) > 0 ? t("pd_in_use") : ""}
+                        onClick={() => setConfirmDel(p)}>{t("pd_delete")}</button>}
                       {usedCount(p) > 0 && <small className="pd-locked">{t("pd_in_use")}</small>}
                     </td>
                   </tr>

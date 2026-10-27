@@ -1495,11 +1495,19 @@ function AppProvider({ children, tweaks }) {
   // An all-scope role sees every module, including Permissions. Otherwise an admin whose
   // module list was trimmed by an earlier edit loses the very tab needed to fix it.
   const canSee = (mod) => !!user && (isBoss || (user.modules || []).includes(mod));
-  const canEdit = (mod) => !!user && (isBoss || (user.editModules ? user.editModules.includes(mod) : (user.modules || []).includes(mod)));
-  // Delete is a permission distinct from edit. If an account has no explicit
-  // deleteModules list yet, it falls back to its edit permissions (legacy behavior).
-  const canDelete = (mod) => !!user && (isBoss || (user.deleteModules ? user.deleteModules.includes(mod) : (user.editModules ? user.editModules.includes(mod) : (user.modules || []).includes(mod))));
-  const canExport = (mod) => !!user && (isBoss || (user.exportModules ? user.exportModules.includes(mod) : (user.modules || []).includes(mod)));
+  // Access level of the signed-in account on a module ("none" | "view" | "edit" | "admin").
+  const permOf = (mod) => C.permOf(user, mod, isBoss);
+  const can = (mod, level) => C.permRank(permOf(mod)) >= C.permRank(level);
+  // Accounts without user.perms (written before access levels existed) keep the gate a
+  // control had before; once their role's levels are applied, the level decides.
+  const hasLevels = !!(user && user.perms && typeof user.perms === "object");
+  const lvlOr = (mod, level, legacy) => isBoss || (hasLevels ? can(mod, level) : !!legacy);
+  // Edit needs "edit"; delete, import and maintenance need "admin"; export needs "view".
+  // Legacy accounts keep their old per-account edit / delete / export lists exactly.
+  const legacyEdit = (mod) => (user.editModules ? user.editModules.includes(mod) : (user.modules || []).includes(mod));
+  const canEdit = (mod) => !!user && (isBoss || (hasLevels ? can(mod, "edit") : legacyEdit(mod)));
+  const canDelete = (mod) => !!user && (isBoss || (hasLevels ? can(mod, "admin") : (user.deleteModules ? user.deleteModules.includes(mod) : legacyEdit(mod))));
+  const canExport = (mod) => !!user && (isBoss || (hasLevels ? can(mod, "view") : (user.exportModules ? user.exportModules.includes(mod) : (user.modules || []).includes(mod))));
   // Deleting a customer REALLY removes the record from the `extras` blob and pushes
   // the smaller blob to Supabase ("customers"), exactly like every other tab removes
   // from its own array. All 2350 customers live in `extras` (window.CRM_CUSTOMERS is
@@ -1777,7 +1785,7 @@ function AppProvider({ children, tweaks }) {
     customers, projects: projectsLive, activity, addActivity,
     user, authReady, isBoss, isCountryMgr, teamCodes, assignableCodes, assignablePics, allSalesCodes, login, logout, updateCustomer, updateStatus, moveToStage, addCustomer, addCustomersBulk, addContactLog,
     logs, addLog, logsFor,
-    addProject, updateProject, scopeCustomers, scopeProjects, canSee, canEdit, canDelete, canExport, tweaks, canonCode,
+    addProject, updateProject, scopeCustomers, scopeProjects, canSee, canEdit, canDelete, canExport, permOf, can, lvlOr, hasLevels, tweaks, canonCode,
     findOrCreateCustomer,
     deleteCustomer, deleteProject, deleteSample, deleteQuotation, deletePO, deletePORecords,
     deleteCustomers, deleteProjects, deleteSamples, deleteQuotations, deletePOs, deleteProducts, updateCustomers,

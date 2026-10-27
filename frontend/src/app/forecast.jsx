@@ -24,7 +24,9 @@ function FcMom({ cur, prev }) {
 }
 
 function SalesForecastPage() {
-  const { t, isBoss, isCountryMgr, assignableCodes, repCountry, user, users, scopeCustomers, customers, pos, money, currency, setCurrency, canExport, skuForecast, saveSkuCell, saveSkuMeta, deleteSkuRow, products, picFilterCodes, canonCode } = useApp();
+  const { t, isBoss, isCountryMgr, assignableCodes, repCountry, user, users, scopeCustomers, customers, pos, money, currency, setCurrency, canExport, skuForecast, saveSkuCell, saveSkuMeta, deleteSkuRow, products, picFilterCodes, canonCode, lvlOr } = useApp();
+  // Forecast cells, notes and status need edit; removing a manual row needs admin.
+  const fcEdit = lvlOr("forecast", "edit", true), fcAdmin = lvlOr("forecast", "admin", true);
   const FCC = window.CRM;
   const FC_SUGGEST_RATIO = 0.35; // suggested future FC = latest actual × 35% (editable)
   const today = new Date();
@@ -391,7 +393,7 @@ function SalesForecastPage() {
         </div>
         <div className="head-actions">
           {canExport && canExport("forecast") && <button className="btn btn-ghost" onClick={exportForecast}><Icon d={ICONS.download} size={15} /> Export CSV</button>}
-          <button className="btn btn-primary" onClick={() => setAddCust(true)}><Icon d={ICONS.plus} size={15} /> {t("fc_add_cust")}</button>
+          {fcEdit && <button className="btn btn-primary" onClick={() => setAddCust(true)}><Icon d={ICONS.plus} size={15} /> {t("fc_add_cust")}</button>}
         </div>
       </header>
       <div className="list-toolbar">
@@ -483,7 +485,7 @@ function SalesForecastPage() {
                           <tr className="sf-prod-row sf-fc-row">
                             <td className="sf-l" rowSpan={2}>
                               <span className="sf-code">{sku}</span> <span className="sf-badge">{sm.type}</span>
-                              {sm.manual && !actualKeys.some(k => (sm.actuals[k] || {}).qty) ? <button className="sf-del-row" title={t("fc_del_row")} onClick={() => crmConfirm(t("fc_del_row"), () => deleteSkuRow(cm.key, sku))}>✕</button> : null}
+                              {fcAdmin && sm.manual && !actualKeys.some(k => (sm.actuals[k] || {}).qty) ? <button className="sf-del-row" title={t("fc_del_row")} onClick={() => crmConfirm(t("fc_del_row"), () => deleteSkuRow(cm.key, sku))}>✕</button> : null}
                               <span className="sf-size" style={{ display: "block" }}>{sm.grade}{sm.width ? ` · ${sm.width}×${sm.length}` : ""}</span>
                               {lp ? (
                                 <span className="sf-size sf-price" style={{ display: "block" }}>
@@ -497,10 +499,10 @@ function SalesForecastPage() {
                               const cls = i === 3 ? "sf-cur" : i > 3 ? "sf-fut" : "";
                               return (
                                 <td key={yk} className={cls}>
-                                  <input className="sf-in" type="text" inputMode="numeric" disabled={locked}
+                                  <input className="sf-in" type="text" inputMode="numeric" disabled={locked || !fcEdit}
                                     value={fc.fcQty ? FCC.fmtNum(fc.fcQty) : ""} placeholder={FCC.fmtNum(suggestQty(sm) || 0)}
                                     onChange={e => { const q = parseNum(e.target.value); saveSkuCell(cm.key, sku, yk, rowEff > 0 ? { fcQty: q, fcValue: Math.round(q * rowEff) } : { fcQty: q }); }} />
-                                  <input className="sf-in sf-in-v" type="text" inputMode="decimal" disabled={locked}
+                                  <input className="sf-in sf-in-v" type="text" inputMode="decimal" disabled={locked || !fcEdit}
                                     value={amtEdit && amtEdit.id === (cm.key + "|" + sku + "|" + yk) ? amtEdit.raw : toDisp(fc.fcValue)} placeholder={toDisp(suggestVal(sm, sku)) || "0"}
                                     onChange={e => { setAmtEdit({ id: cm.key + "|" + sku + "|" + yk, raw: e.target.value }); saveSkuCell(cm.key, sku, yk, "fcValue", toVnd(e.target.value)); }}
                                     onBlur={() => setAmtEdit(null)} />
@@ -508,12 +510,12 @@ function SalesForecastPage() {
                               );
                             })}
                             <td className="sf-l" rowSpan={2}>
-                              <textarea className="sf-note-in" rows={2} placeholder={t("fc_note")}
+                              <textarea className="sf-note-in" rows={2} placeholder={t("fc_note")} disabled={!fcEdit}
                                 defaultValue={meta.note || ""}
                                 onBlur={e => saveSkuMeta(cm.key, sku, "note", e.target.value)} />
                             </td>
                             <td rowSpan={2}>
-                              <select className="select" style={{ fontSize: 11, padding: "3px 6px" }}
+                              <select className="select" style={{ fontSize: 11, padding: "3px 6px" }} disabled={!fcEdit}
                                 value={meta.status || "Draft"} onChange={e => saveSkuMeta(cm.key, sku, "status", e.target.value)}>
                                 {FCC.FORECAST_STATUSES.map(s => <option key={s} value={s}>{t("fc_status_" + s)}</option>)}
                               </select>

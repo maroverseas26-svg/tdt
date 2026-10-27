@@ -188,6 +188,8 @@ function RetentionProductRows({ r, custPOs, curMonthIdx, money, t, notes, addNot
 }
 
 function NoteCell({ list, onAdd, t }) {
+  // Adding a note writes to the customer's contact log: needs edit on Retention.
+  const canNote = useApp().lvlOr("retention", "edit", true);
   const [editing, setEditing] = useState(false);
   const [val, setVal] = useState("");
   const save = () => { const v = val.trim(); if (v) onAdd(v); setVal(""); setEditing(false); };
@@ -207,7 +209,7 @@ function NoteCell({ list, onAdd, t }) {
           <button className="btn btn-ghost btn-sm" onClick={() => { setEditing(false); setVal(""); }}>✕</button>
         </div>
       ) : (
-        <button className="ret-detail-link" onClick={() => setEditing(true)}>+ {t("ret_add_note")}</button>
+        canNote && <button className="ret-detail-link" onClick={() => setEditing(true)}>+ {t("ret_add_note")}</button>
       )}
     </div>
   );

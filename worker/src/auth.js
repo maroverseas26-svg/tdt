@@ -10,7 +10,7 @@ const MIN_PASSWORD = 4; // same rule as the app's reset screen (rp_short)
 const MAX_FAILS = 10; // failed logins per email per window before 429
 const FAIL_WINDOW_S = 15 * 60;
 // Fields a non-admin may not change on their own profile.
-const PROTECTED_FIELDS = ["id", "email", "role", "modules", "countries", "salesCode", "active", "_deleted", "loginCard"];
+const PROTECTED_FIELDS = ["id", "email", "role", "modules", "perms", "editModules", "deleteModules", "exportModules", "countries", "salesCode", "active", "_deleted", "loginCard"];
 
 /* ---------- password hashing (PBKDF2-SHA256, iterations stored per hash) ---------- */
 async function pbkdf2(password, salt, iterations) {

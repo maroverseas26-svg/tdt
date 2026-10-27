@@ -49,7 +49,7 @@ function CustomersPage({ selected, setSelected, openNewProject, openProject, ope
 
 /* ================= List ================= */
 function CustomerList({ onOpen }) {
-  const { t, isBoss, scopeCustomers, scopeProjects, scopePOs, canExport, canEdit, canDelete: canDeletePerm, deleteCustomers, users } = useApp();
+  const { t, isBoss, scopeCustomers, scopeProjects, scopePOs, canExport, canEdit, canDelete: canDeletePerm, lvlOr, deleteCustomers, users } = useApp();
   const [q, setQ] = useState("");
   const sel = useRowSelection();
   const [bulkEdit, setBulkEdit] = useState(false);
@@ -209,10 +209,10 @@ function CustomerList({ onOpen }) {
               owner: c.owner,
               note: c.note,
             })} />}
-          <button className="btn btn-ghost" onClick={() => setImporting(true)}><Icon d={ICONS.upload} size={15} /> {t("im_btn")}</button>
-          <button className="btn btn-primary" onClick={() => setAdding(true)}><Icon d={ICONS.plus} size={15} /> {t("cu_add")}</button>
+          {lvlOr("customers", "admin", true) && <button className="btn btn-ghost" onClick={() => setImporting(true)}><Icon d={ICONS.upload} size={15} /> {t("im_btn")}</button>}
+          {lvlOr("customers", "edit", true) && <button className="btn btn-primary" onClick={() => setAdding(true)}><Icon d={ICONS.plus} size={15} /> {t("cu_add")}</button>}
           <MoreMenu items={[
-            legacyLead.length > 0 && canEdit && canEdit("customers") && { key: "lead", label: t("cu_lead_fix") + " (" + legacyLead.length + ")", title: t("cu_lead_fix_hint"), icon: ICONS.refresh, onClick: () => setFixLead(true) },
+            legacyLead.length > 0 && lvlOr("customers", "admin", canEdit("customers")) && { key: "lead", label: t("cu_lead_fix") + " (" + legacyLead.length + ")", title: t("cu_lead_fix_hint"), icon: ICONS.refresh, onClick: () => setFixLead(true) },
             canDelete && filtered.length > 0 && { key: "delall", label: t("cu_delete_all") + " (" + filtered.length + ")", icon: ICONS.trash, danger: true, onClick: deleteAll },
           ]} />
         </div>
@@ -1147,7 +1147,7 @@ function LeadNurturingCard({ customerId }) {
   );
 }
 
-function Timeline({ customerId, memberIds }) {
+function Timeline({ customerId, memberIds, readOnly }) {
   const { t, logs, logsFor, addLog, customers, updateCustomer } = useApp();
   const cust = customers.find(c => c.id === customerId);
   const ids = memberIds && memberIds.length ? memberIds : [customerId];
@@ -1200,7 +1200,7 @@ function Timeline({ customerId, memberIds }) {
     <section className="card profile-timeline">
       <h2>{t("lg_title")} <span className="count-pill">{allEntries.length}</span></h2>
       {cust && (
-        <div className="form-grid" style={{ marginBottom: 12 }}>
+        <fieldset className="form-grid ro-fieldset" disabled={!!readOnly} style={{ marginBottom: 12 }}>
           <Field label={t("cu_decision_maker")}>
             <label className="check-row" style={{ margin: 0 }}>
               <input type="checkbox" checked={!!cust.decisionMaker} onChange={toggleDecisionMaker} />
@@ -1216,9 +1216,9 @@ function Timeline({ customerId, memberIds }) {
           <Field label={t("cu_next_action_note")}>
             <input className="input" value={naNote} onChange={e => setNaNote(e.target.value)} onBlur={saveNextAction} placeholder={t("cu_next_action_ph")} />
           </Field>
-        </div>
+        </fieldset>
       )}
-      <div className="composer">
+      {!readOnly && <div className="composer">
         <div className="composer-tabs">
           {[["note", "lg_note"], ["call", "lg_call"], ["meeting", "lg_meeting"], ["file", "lg_file"]].map(([k, lk]) => (
             <button key={k} className={"composer-tab" + (tab === k ? " on" : "")} onClick={() => setTab(k)}>
@@ -1245,7 +1245,7 @@ function Timeline({ customerId, memberIds }) {
             placeholder={tab === "call" ? t("lg_call_ph") : tab === "meeting" ? t("lg_meeting_ph") : t("lg_note_ph")}></textarea>
           <button className="btn btn-primary" disabled={!canAdd} onClick={submit}>{t("lg_add")}</button>
         </div>
-      </div>
+      </div>}
       {allEntries.length === 0 ? <p className="empty">{t("lg_empty")}</p> : (
         <div className="timeline">
           {allEntries.map(e => (
@@ -1282,7 +1282,7 @@ function Timeline({ customerId, memberIds }) {
 }
 
 function CustomerProfile({ id, onBack, openCompany, openNewProject, openProject, openPO, openQuote }) {
-  const { t, customers, scopeProjects, scopePOs, updateStatus, updateCustomer, addContactLog, samplesFor, quotationsFor, retentionRows, money: moneyGlobal, currency: curGlobal, deleteCustomer, canEdit, canDelete } = useApp();
+  const { t, customers, scopeProjects, scopePOs, updateStatus, updateCustomer, addContactLog, samplesFor, quotationsFor, retentionRows, money: moneyGlobal, currency: curGlobal, deleteCustomer, canEdit, canDelete, lvlOr } = useApp();
   const [poCreating, setPoCreating] = useState(false);
   const [editing, setEditing] = useState(false);
   // Full PO history for this customer fetched on demand (not held in RAM) — scales.
@@ -1378,7 +1378,7 @@ function CustomerProfile({ id, onBack, openCompany, openNewProject, openProject,
         </div>
         <div className="profile-status">
           <label className="field-label">{t("cu_change_status")}</label>
-          <select className="select" value={c.status} onChange={e => updateStatus(c.id, e.target.value)}>
+          <select className="select" value={c.status} disabled={!lvlOr("customers", "edit", true)} onChange={e => updateStatus(c.id, e.target.value)}>
             <option value="">{t("none")}</option>
             {statuses.map(s => <option key={s} value={s}>{s}</option>)}
           </select>
@@ -1444,9 +1444,9 @@ function CustomerProfile({ id, onBack, openCompany, openNewProject, openProject,
         <section className="card profile-projects">
           <h2>{t("cu_projects")} <span className="count-pill">{projs.length}</span>
             {projTotal > 0 && <span className="card-hint" style={{ marginLeft: 8 }}>{CU.fmtMoneyFull(projTotal, currency)} {currency}</span>}
-            <button className="btn btn-primary btn-sm" style={{ marginLeft: "auto" }} onClick={() => openNewProject(repId)}>
+            {lvlOr("projects", "edit", true) && <button className="btn btn-primary btn-sm" style={{ marginLeft: "auto" }} onClick={() => openNewProject(repId)}>
               <Icon d={ICONS.plus} size={14} /> {t("cu_new_project")}
-            </button>
+            </button>}
           </h2>
           {projs.length === 0 ? <p className="empty">{t("cu_no_projects")}</p> : (
             <table className="table table-plain">
@@ -1468,9 +1468,9 @@ function CustomerProfile({ id, onBack, openCompany, openNewProject, openProject,
         <section className="card profile-projects">
           <h2>{t("pol_title")} <span className="count-pill">{custPOGroups.length}</span>
             {poTotal > 0 && <span className="card-hint" style={{ marginLeft: 8 }}>{CU.fmtMoneyFull(poTotal, currency)} {currency}</span>}
-            <button className="btn btn-primary btn-sm" style={{ marginLeft: "auto" }} onClick={() => setPoCreating(true)}>
+            {lvlOr("polist", "edit", true) && <button className="btn btn-primary btn-sm" style={{ marginLeft: "auto" }} onClick={() => setPoCreating(true)}>
               <Icon d={ICONS.plus} size={14} /> {t("pol_new")}
-            </button>
+            </button>}
           </h2>
           {custPOGroups.length === 0 ? <p className="empty">{t("pol_no_pos")}</p> : (
             <table className="table table-plain">
@@ -1566,7 +1566,7 @@ function CustomerProfile({ id, onBack, openCompany, openNewProject, openProject,
             </section>
           );
         })()}
-        <Timeline customerId={id} memberIds={isGroup ? [...memberIds] : null} />
+        <Timeline customerId={id} memberIds={isGroup ? [...memberIds] : null} readOnly={!lvlOr("customers", "edit", true)} />
       </div>
       {poCreating && <POFormModal presetCustomerId={repId} onClose={() => setPoCreating(false)} />}
       {editing && <EditCustomerModal customer={c} onClose={() => setEditing(false)} />}

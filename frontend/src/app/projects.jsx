@@ -18,7 +18,7 @@ function ProjMom({ cur, prev }) {
 }
 
 function ProjectsPage({ openCustomer, newProjectFor, clearNewProjectFor, selected, setSelected }) {
-  const { t, isBoss, scopeProjects: scopeProjectsAll, scopeCustomers, customers, currency, setCurrency, money, canExport, canEdit, canDelete: canDeletePerm, deleteProjects, addProjectsBulk, users, picFilterCodes } = useApp();
+  const { t, isBoss, scopeProjects: scopeProjectsAll, scopeCustomers, customers, currency, setCurrency, money, canExport, canEdit, canDelete: canDeletePerm, lvlOr, deleteProjects, addProjectsBulk, users, picFilterCodes } = useApp();
   const money_full = (v) => PR.fmtMoneyFull(v, currency);
   const sel = useRowSelection();
   const grp = useGroupToggle();
@@ -187,8 +187,8 @@ function ProjectsPage({ openCustomer, newProjectFor, clearNewProjectFor, selecte
                 created_at: p.createdAt,
               };
             }} />}
-          <button className="btn btn-ghost" onClick={() => setImporting(true)}><Icon d={ICONS.upload} size={15} /> {t("pol_import_excel")}</button>
-          <button className="btn btn-primary" onClick={() => setCreating(true)}><Icon d={ICONS.plus} size={15} /> {t("pr_new")}</button>
+          {lvlOr("projects", "admin", true) && <button className="btn btn-ghost" onClick={() => setImporting(true)}><Icon d={ICONS.upload} size={15} /> {t("pol_import_excel")}</button>}
+          {lvlOr("projects", "edit", true) && <button className="btn btn-primary" onClick={() => setCreating(true)}><Icon d={ICONS.plus} size={15} /> {t("pr_new")}</button>}
         </div>
       </header>
       <div className="list-toolbar">
@@ -360,7 +360,7 @@ const PROJECT_IMPORT_FIELDS = [
 ];
 
 function ProjectProfile({ id, onBack, openCustomer }) {
-  const { t, projects, updateProject, customers, addLog, money, currency, deleteProject, canEdit, canDelete } = useApp();
+  const { t, projects, updateProject, customers, addLog, money, currency, deleteProject, canEdit, canDelete, lvlOr } = useApp();
   const [editing, setEditing] = useState(false);
   const p = projects.find(x => x.id === id);
   if (!p) return null;
@@ -421,7 +421,7 @@ function ProjectProfile({ id, onBack, openCustomer }) {
         </div>
         <div className="profile-status">
           <label className="field-label">{t("pr_stage")}</label>
-          <select className="select" value={p.stage} onChange={e => setStage(e.target.value)}>
+          <select className="select" value={p.stage} disabled={!lvlOr("projects", "edit", true)} onChange={e => setStage(e.target.value)}>
             {PR.PROJECT_STAGES.map(s => <option key={s} value={s}>{t("st_" + s)}</option>)}
           </select>
           <div style={{ display: "flex", gap: 8, alignSelf: "flex-end" }}>
@@ -441,7 +441,7 @@ function ProjectProfile({ id, onBack, openCustomer }) {
           {p.note && <p className="note-text">{p.note}</p>}
         </section>
         <LineItemsView items={p.items} t={t} cur={currency} />
-        <Timeline customerId={p.id} />
+        <Timeline customerId={p.id} readOnly={!lvlOr("projects", "edit", true)} />
       </div>
     </div>
   );

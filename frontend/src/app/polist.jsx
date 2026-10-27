@@ -89,7 +89,7 @@ function PoKpiSub({ st, fmt }) {
 }
 
 function POListPage({ openCustomer, selected, setSelected, presetFromQuote, clearPresetFromQuote, presetDates, clearPresetDates }) {
-  const { t, isBoss, isCountryMgr, scopePOs: scopePOsRaw, scopeCustomers, visibleCountries, countryFilter, picFilterCodes, backfillPOPrices, cleanupPODuplicates, posLoad, teamCodes, user, customers, users, currency, setCurrency, money, pos, canExport, canEdit, canDelete: canDeletePerm, deletePOs, deletePORecords, updateCustomer, canonCode } = useApp();
+  const { t, isBoss, isCountryMgr, scopePOs: scopePOsRaw, scopeCustomers, visibleCountries, countryFilter, picFilterCodes, backfillPOPrices, cleanupPODuplicates, posLoad, teamCodes, user, customers, users, currency, setCurrency, money, pos, canExport, canEdit, canDelete: canDeletePerm, deletePOs, deletePORecords, updateCustomer, canonCode, lvlOr } = useApp();
   const moneyFull = (v) => PO.fmtMoneyFull(v, currency);
   // per-m² / per-roll prices are tiny in THB or USD — rounding them to whole VND first
   // printed "0.00", so they format straight from the raw value with adaptive decimals
@@ -464,9 +464,9 @@ function POListPage({ openCustomer, selected, setSelected, presetFromQuote, clea
                 warning: p.warning,
               };
             }} />}
-          <button className="btn btn-ghost" onClick={() => setImporting(true)}><Icon d={ICONS.upload} size={15} /> {t("pol_import_excel")}</button>
-          <button className="btn btn-primary" onClick={() => setCreating(true)}><Icon d={ICONS.plus} size={15} /> {t("pol_new")}</button>
-          {isBoss && <MoreMenu busy={fixing} items={[
+          {lvlOr("polist", "admin", true) && <button className="btn btn-ghost" onClick={() => setImporting(true)}><Icon d={ICONS.upload} size={15} /> {t("pol_import_excel")}</button>}
+          {lvlOr("polist", "edit", true) && <button className="btn btn-primary" onClick={() => setCreating(true)}><Icon d={ICONS.plus} size={15} /> {t("pol_new")}</button>}
+          {lvlOr("polist", "admin", isBoss) && <MoreMenu busy={fixing} items={[
             { key: "fix", label: t("pol_fix_prices"), title: t("pol_fix_prices_hint"), icon: ICONS.refresh, disabled: !!fixing,
               onClick: async () => {
                 if (fixing) return;
@@ -781,7 +781,7 @@ function POInputHistory({ po, t }) {
 /* ---- PO full page (editable) ---- */
 function POProfile({ id, onBack, openCustomer }) {
   const { t, user, isBoss, assignablePics, teamCodes, pos, updatePO, updateCustomer, customers, products, users, money, currency, repCountry } = useApp();
-  const { deletePO, deletePORecords } = useApp();
+  const { deletePO, deletePORecords, lvlOr } = useApp();
   const [edit, setEdit] = useState(false);
   const [f, setF] = useState(null);
   const [fetchedPO, setFetchedPO] = useState(null);
@@ -800,7 +800,10 @@ function POProfile({ id, onBack, openCustomer }) {
   if (!p) return null;
   const c = customers.find(x => x.id === p.customerId);
   const inf = { orderCount: p.orderCount || 1, newRepeat: p.newRepeat || ((p.orderCount || 1) > 1 ? "Repeat" : "New") };
-  const canEdit = isBoss || (user.salesCode && teamCodes.includes(p.pic));
+  // Own team's PO only (as before), and the account's level on PO List: edit / admin (delete).
+  const ownPO = isBoss || (user.salesCode && teamCodes.includes(p.pic));
+  const canEdit = ownPO && lvlOr("polist", "edit", true);
+  const canDel = ownPO && lvlOr("polist", "admin", true);
   const set = (k, v) => setF(prev => ({ ...prev, [k]: v }));
   const salesCodes = [...new Set(users.filter(u => u.salesCode).map(u => u.salesCode))];
 
@@ -891,7 +894,7 @@ function POProfile({ id, onBack, openCustomer }) {
         <div className="profile-status">
           <strong className="cell-money" style={{ fontSize: 20 }}>{PO.fmtMoneyFull(mergedAmount, currency)}</strong>
           {canEdit && !edit && <button className="btn btn-primary btn-sm" onClick={startEdit}>{t("pd_edit")}</button>}
-          {canEdit && !edit && <button className="btn btn-danger btn-sm" onClick={() => crmConfirm(t("del_confirm"), () => { deletePORecords([p]); onBack(); })}>{t("pd_delete")}</button>}
+          {canDel && !edit && <button className="btn btn-danger btn-sm" onClick={() => crmConfirm(t("del_confirm"), () => { deletePORecords([p]); onBack(); })}>{t("pd_delete")}</button>}
         </div>
       </header>
 

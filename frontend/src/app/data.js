@@ -153,6 +153,28 @@
   function cleanCode(v) { var s = String(v == null ? "" : v).trim(); return (!s || NON_CODE_RE.test(s)) ? "" : s; }
   // Base code of a structure code: "TDM240.110×300" → "TDM240", "TDM230.910" → "TDM230".
   function baseCode(v) { var s = cleanCode(v); return s ? s.split(/[.\s·|/]/)[0].trim() : ""; }
+  // ---- access levels (role x module) ----
+  // "none" < "view" (read-only + export) < "edit" (create/edit) < "admin" (delete, import,
+  // maintenance). A role's perms live in settings/roles; each account carries a copy in
+  // user.perms (missing key = no access). Accounts written before levels existed have no
+  // user.perms: their level comes from the old per-account flags, see legacyPermOf.
+  const PERM_LEVELS = ["none", "view", "edit", "admin"];
+  const permRank = (l) => Math.max(0, PERM_LEVELS.indexOf(l || "none"));
+  function legacyPermOf(u, mod) {
+    if (!u || !(u.modules || []).includes(mod)) return "none";
+    if (mod === "admin") return "admin";
+    const del = u.deleteModules || u.editModules || u.modules || [];
+    const edit = u.editModules || u.modules || [];
+    return del.includes(mod) ? "admin" : edit.includes(mod) ? "edit" : "view";
+  }
+  // full = the account's role has scope All (Admin): every module at "admin".
+  function permOf(u, mod, full) {
+    if (!u) return "none";
+    if (full) return "admin";
+    if (!(u.modules || []).includes(mod)) return "none";
+    if (u.perms && typeof u.perms === "object") return PERM_LEVELS.includes(u.perms[mod]) ? u.perms[mod] : "none";
+    return legacyPermOf(u, mod);
+  }
   function kpiCountryOf(u) {
     if (!u) return "";
     const tc = u.targetCountry;
@@ -1667,7 +1689,7 @@
   ].filter(f => f.customerId).map((f, i) => ({ forecastId: "FC-" + String(i + 1).padStart(3, "0"), ...f }));
 
   window.CRM = {
-    normName, canonCodeFn, normCountry, normGroup, cleanCode, baseCode, kpiCountryOf, KPI_NONE, poPricing, rollArea, findDuplicates, normBizId, parseCSV, readImportFile, parseDate, toISO, normalizePOs, SB, API, RESET_FN_BASE,
+    normName, canonCodeFn, normCountry, normGroup, cleanCode, baseCode, kpiCountryOf, KPI_NONE, PERM_LEVELS, permRank, permOf, legacyPermOf, poPricing, rollArea, findDuplicates, normBizId, parseCSV, readImportFile, parseDate, toISO, normalizePOs, SB, API, RESET_FN_BASE,
     nameCodeOf, nameCodeKey, suggestNameCode, nameCodeGroups, parentMapOf, findByBizId, formatBizId, bizIdIssue, invInUse, distinctInvoices, logText,
     STATUS_TO_FUNNEL, STAGES, STAGE_KEY, STAGE_COLORS, STAGE_DEFAULT_STATUS, ALL_STATUSES,
     MODULES, MARKETS, SEED_USERS, SEED_ROLES, SEED_PROJECTS, PROJECT_STAGES, PROJECT_STAGE_COLORS, INK_TYPES,
