@@ -193,8 +193,8 @@ function QuotationsPage({ openCustomer, openProject, openPOFromQuote, selected, 
                   <td><button className="link-btn pr-cust-link" onClick={e => { e.stopPropagation(); setDetail(x.id); }}>{custName(x.customerId)}</button></td>
                   <td><strong className="cell-main">{x.id}</strong>
                     {x.projectId && <small className="cell-sub">{projName(x.projectId)}</small>}</td>
-                  <td className="hide-sm">{QT.fmtDate(x.quoteDate)}</td>
-                  <td className="hide-sm">{QT.fmtDate(x.validUntil)}</td>
+                  <td className="hide-sm cell-date">{QT.fmtDate(x.quoteDate)}</td>
+                  <td className="hide-sm cell-date">{QT.fmtDate(x.validUntil)}</td>
                   <td><QuoteStatusBadge status={x.status} t={t} /></td>
                   <td className="cell-money pr-value-col">{QT.fmtMoneyFull(quoteTotalVnd(x), currency)}</td>
                   <td className="hide-sm">#{x.revisionNo || 1}</td>
@@ -207,6 +207,12 @@ function QuotationsPage({ openCustomer, openProject, openPOFromQuote, selected, 
               const gCust = customers.find(c => c.id === repCustomerId);
               const grpCode = companyCount === 1 && gCust && gCust.bizId ? gCust.bizId : "";
               const grpDate = items.reduce((mx, x) => (x.quoteDate && x.quoteDate > mx ? x.quoteDate : mx), "");
+              // Several companies: name the group after its parent (head office, else the shortest
+              // name under the Name Code), not after whichever branch quoted first.
+              const grpMembers = companyCount > 1 ? customers.filter(c => QT.nameCodeKey(QT.nameCodeOf(c)) === key) : [];
+              const grpHead = grpMembers.find(c => /head\s*office/i.test(c.name || "")) || grpMembers.slice().sort((a, b) => (a.shortName || a.name || "").length - (b.shortName || b.name || "").length)[0];
+              const grpName = grpHead ? (grpHead.shortName || grpHead.name) : custName(repCustomerId);
+              const grpNC = grpHead ? QT.nameCodeOf(grpHead) : "";
               return (
                 <React.Fragment key={"g-" + key}>
                   <tr className={"grp-row row-click" + (open ? " open" : "")} onClick={() => grp.toggle(key)}>
@@ -217,7 +223,7 @@ function QuotationsPage({ openCustomer, openProject, openPOFromQuote, selected, 
                           <span className="ret-exp-caret"><Icon d='<path d="M6 9l6 6 6-6"/>' size={15} /></span>
                         </button>
                         <div>
-                          <strong className="cell-main">{custName(repCustomerId)}{companyCount > 1 && <span className="nc-chip" style={{ marginLeft: 6 }}>{companyCount} {t("nc_companies")}</span>}</strong>
+                          <strong className="cell-main">{grpName}{grpNC && <span className="nc-chip nc-chip-navy" style={{ marginLeft: 6 }}>{grpNC}</span>}{companyCount > 1 && <span className="nc-chip" style={{ marginLeft: 6 }}>{companyCount} {t("nc_companies")}</span>}</strong>
                           <div className="ret-cust-tags"><span className="ret-cust-meta">{items.length} {t("nav_quotations").toLowerCase()}{grpDate ? " · " + QT.fmtDate(grpDate) : ""}{grpCode ? " · " + grpCode : ""}</span></div>
                         </div>
                       </div>

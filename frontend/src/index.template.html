@@ -546,6 +546,7 @@ textarea.input{resize:vertical}
 /* Header: title + subtitle left; Export ▾ · Import · + New · More ⋯ right, never wrapped.
    Filter bar: search · people · status/stage/type/group · currency · Sort by · toggles. */
 .list-head{align-items:center;flex-wrap:nowrap;margin-bottom:14px}
+.table td.cell-date{white-space:nowrap}
 .list-head > div:first-child{min-width:0}
 .list-head .head-actions{flex:0 0 auto;flex-wrap:nowrap}
 .list-head .btn,.list-toolbar .btn,.list-toolbar > .select,.list-toolbar .search-box,.list-toolbar .seg,.list-head-seg{height:36px;box-sizing:border-box}
@@ -1751,6 +1752,7 @@ function Root(){
   const [selProj, setSelProj] = React.useState(null);
   const [selPO, setSelPO] = React.useState(null);
   const [selQuote, setSelQuote] = React.useState(null);
+  const [selSample, setSelSample] = React.useState(null);
   const [newProjFor, setNewProjFor] = React.useState(null);
   const [poFromQuote, setPoFromQuote] = React.useState(null);
   const [poDates, setPoDates] = React.useState(null);
@@ -1774,18 +1776,19 @@ function Root(){
   const openProject = (id) => { setSelProj(id); setPage("projects"); };
   const openPO = (id) => { setSelPO(id); setPage("polist"); };
   const openQuote = (id) => { setSelQuote(id); setPage("quotations"); };
+  const openSample = (id) => { setSelSample(id); setPage("samples"); };
   const openNewProject = (custId) => { setNewProjFor(custId); setPage("projects"); };
   const openPOFromQuote = (quote) => { setPoFromQuote(quote); setPage("polist"); };
   const openPOPeriod = (range) => { setPoDates(range); setSelPO(null); setPage("polist"); };
 
   return (
-    <Shell page={page} setPage={(p) => { setPage(p); setNavSeq(n => n + 1); setSelCust(null); setSelProj(null); setSelPO(null); setSelQuote(null); setNewProjFor(null); setPoFromQuote(null); setPoDates(null); }}>
+    <Shell page={page} setPage={(p) => { setPage(p); setNavSeq(n => n + 1); setSelCust(null); setSelProj(null); setSelPO(null); setSelQuote(null); setSelSample(null); setNewProjFor(null); setPoFromQuote(null); setPoDates(null); }}>
       <React.Fragment key={navSeq}>
       {page === "overview" && <OverviewPage goCustomer={openCustomer} goProjects={() => setPage("projects")} goProject={openProject} goReorder={() => setPage("retention")} goPOPeriod={openPOPeriod} />}
       {page === "customers" && <CustomersPage selected={selCust} setSelected={setSelCust} openNewProject={openNewProject} openProject={openProject} openPO={openPO} openQuote={openQuote} />}
-      {page === "pipelines" && <PipelinesPage openCustomer={openCustomer} openProject={openProject} />}
+      {page === "pipelines" && <PipelinesPage openCustomer={openCustomer} openProject={openProject} openSample={openSample} openQuote={openQuote} />}
       {page === "projects" && <ProjectsPage openCustomer={openCustomer} newProjectFor={newProjFor} clearNewProjectFor={() => setNewProjFor(null)} selected={selProj} setSelected={setSelProj} />}
-      {page === "samples" && <SamplesPage openCustomer={openCustomer} openProject={openProject} />}
+      {page === "samples" && <SamplesPage openCustomer={openCustomer} openProject={openProject} selected={selSample} setSelected={setSelSample} />}
       {page === "quotations" && <QuotationsPage openCustomer={openCustomer} openProject={openProject} openPOFromQuote={openPOFromQuote} selected={selQuote} setSelected={setSelQuote} />}
       {page === "polist" && <POListPage openCustomer={openCustomer} selected={selPO} setSelected={setSelPO} presetFromQuote={poFromQuote} clearPresetFromQuote={() => setPoFromQuote(null)} presetDates={poDates} clearPresetDates={() => setPoDates(null)} />}
       {page === "products" && <ProductsPage />}
