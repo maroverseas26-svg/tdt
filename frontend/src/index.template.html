@@ -656,8 +656,12 @@ th.sort-active .sort-caret{opacity:1;color:var(--teal)}
 .qx-form h2{font-size:14px;margin:16px 0 8px}
 .qx-form h2:first-child{margin-top:0}
 .qx-form textarea.input{width:100%;resize:vertical}
-.qx-lines td{vertical-align:top}
-.qx-lines .input{padding:6px 8px}
+.qx-form{min-width:0}
+.qx-line{border:1px solid var(--line);border-radius:8px;padding:10px;margin-bottom:10px}
+.qx-line-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px 10px;margin-bottom:8px;align-items:end}
+.qx-line-grid .field:nth-child(-n+2){grid-column:span 2}
+.qx-line-grid .input{padding:6px 8px;width:100%;min-width:0}
+.qx-static{padding:6px 0;font-variant-numeric:tabular-nums}
 .qx-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .qx-preview{position:sticky;top:12px}
 .qx-preview-scroll{overflow:auto;max-height:calc(100vh - 140px);border:1px solid var(--line);border-radius:8px;background:#F3F5F7}

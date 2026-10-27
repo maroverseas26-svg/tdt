@@ -582,26 +582,20 @@ function QuoteSendPage({ q, cust, onClose }) {
           </div>
 
           <h2>{t("qx_lines")}</h2>
-          <div className="table-wrap">
-            <table className="table table-plain qx-lines">
-              <thead><tr><th>Item</th><th>Type</th><th className="num">W×L</th><th className="num">MOQ</th><th className="num">{t("qx_unit_price")} ({d.quoteCcy}/m²)</th><th className="num">USD</th></tr></thead>
-              <tbody>
-                {d.lines.map((l, i) => (
-                  <React.Fragment key={i}>
-                    <tr>
-                      <td><input className="input" value={l.code} onChange={e => setLine(i, "code", e.target.value)} style={{ minWidth: 90 }} /></td>
-                      <td><input className="input" value={l.type} onChange={e => setLine(i, "type", e.target.value)} style={{ minWidth: 130 }} /></td>
-                      <td className="num">{l.width}×{l.length}</td>
-                      <td className="num"><input className="input" type="number" value={l.qty} onChange={e => setLine(i, "qty", e.target.value)} style={{ width: 90 }} /></td>
-                      <td className="num"><input className="input" type="number" step="any" placeholder={qxFmt(rows[i].unit, 4)} value={l.price == null ? "" : l.price} onChange={e => setLine(i, "price", e.target.value === "" ? null : e.target.value)} style={{ width: 110 }} /></td>
-                      <td className="num">{qxFmt(rows[i].usd, 3)}</td>
-                    </tr>
-                    <tr><td colSpan={6}><textarea className="input" rows="3" placeholder={t("qx_note")} value={l.note} onChange={e => setLine(i, "note", e.target.value)} /></td></tr>
-                  </React.Fragment>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          {/* One block per product (not a wide table) so it fits the form column at any width. */}
+          {d.lines.map((l, i) => (
+            <div className="qx-line" key={i}>
+              <div className="qx-line-grid">
+                <Field label="Item"><input className="input" value={l.code} onChange={e => setLine(i, "code", e.target.value)} /></Field>
+                <Field label="Type"><input className="input" value={l.type} onChange={e => setLine(i, "type", e.target.value)} /></Field>
+                <Field label="W×L"><div className="qx-static">{l.width}×{l.length}</div></Field>
+                <Field label="MOQ"><input className="input" type="number" value={l.qty} onChange={e => setLine(i, "qty", e.target.value)} /></Field>
+                <Field label={`${t("qx_unit_price")} (${d.quoteCcy}/m²)`}><input className="input" type="number" step="any" placeholder={qxFmt(rows[i].unit, 4)} value={l.price == null ? "" : l.price} onChange={e => setLine(i, "price", e.target.value === "" ? null : e.target.value)} /></Field>
+                <Field label="USD"><div className="qx-static">{qxFmt(rows[i].usd, 3)}</div></Field>
+              </div>
+              <textarea className="input" rows="3" placeholder={t("qx_note")} value={l.note} onChange={e => setLine(i, "note", e.target.value)} />
+            </div>
+          ))}
 
           <h2>{t("qx_terms")}</h2>
           <Field label={t("qx_terms_title")}><input className="input" value={d.termsTitle} onChange={e => set("termsTitle", e.target.value)} /></Field>
