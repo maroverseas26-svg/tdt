@@ -190,7 +190,7 @@ function QuotationsPage({ openCustomer, openProject, openPOFromQuote, selected, 
               const renderRow = (x, child) => (
                 <tr key={x.id} className={(child ? "grp-child " : "") + "row-click" + (sel.isSel(x.id) ? " row-selected" : "")} onClick={() => setDetail(x.id)}>
                   {canDelete && <td className="col-check"><RowCheck id={x.id} selected={sel.selected} toggle={sel.toggle} /></td>}
-                  <td><button className="link-btn pr-cust-link" onClick={e => { e.stopPropagation(); openCustomer(x.customerId); }}>{custName(x.customerId)}</button></td>
+                  <td><button className="link-btn pr-cust-link" onClick={e => { e.stopPropagation(); setDetail(x.id); }}>{custName(x.customerId)}</button></td>
                   <td><strong className="cell-main">{x.id}</strong>
                     {x.projectId && <small className="cell-sub">{projName(x.projectId)}</small>}</td>
                   <td className="hide-sm">{QT.fmtDate(x.quoteDate)}</td>
