@@ -547,25 +547,45 @@ function AppProvider({ children, tweaks }) {
     addActivity({ user: user ? (user.salesCode || user.name) : "?", action: "added", target: cust.name, detail: data.status || "New lead" });
     return cust;
   };
-  // bulk import: returns {imported, updated, skipped}
+  // bulk import: returns {imported, updated, skipped, matchedByName, issues}
   const addCustomersBulk = (list) => {
     let all = customers.slice();
     const added = [];
     const issues = [];
     const patchById = {};   // newest import wins: existing rows are refreshed, not skipped
-    let skipped = 0, updated = 0;
+    let skipped = 0, updated = 0, matchedByName = 0;
     // Fields the file never owns — an import must not wipe history or re-key a record.
     const KEEP = { _row: 1, id: 1, created: 1, contactHistory: 1, lastContactDate: 1, _updated: 1, _updatedBy: 1 };
+    // Same company name + country (live records only) — the fallback key for rows the
+    // Business ID can't place. The index grows as the file is read, so a company repeated
+    // in the same file lands on one record.
+    const nameKey = (c) => { const n = C.normName(c.name); return n ? n + "|" + C.normCountry(c.country) : ""; };
+    const byName = {};
+    const index = (c) => { const k = nameKey(c); if (!k) return; (byName[k] = (byName[k] || []).filter(x => x.id !== c.id)).push(c); };
+    all.forEach(index);
+    const poCount = {};
+    if (retStats) retStats.forEach(r => { poCount[r.customer_id] = +r.po_count || 0; });
+    else pos.forEach(p => { if (!p._deleted && p.customerId) poCount[p.customerId] = (poCount[p.customerId] || 0) + 1; });
+    // A same-name record with a different Business ID is another legal entity. Among the
+    // rest prefer the one with a Business ID, then the most POs, then the oldest.
+    const byNameMatch = (data) => {
+      const k = nameKey(data); if (!k || !byName[k]) return null;
+      const biz = C.normBizId(data.bizId);
+      const cands = byName[k].filter(c => { const cb = C.normBizId(c.bizId); return !biz || !cb || cb === biz; });
+      cands.sort((a, b) => (!!C.normBizId(b.bizId) - !!C.normBizId(a.bizId)) || ((poCount[b.id] || 0) - (poCount[a.id] || 0)) || String(a.created || "9").localeCompare(String(b.created || "9")));
+      return cands[0] || null;
+    };
     list.forEach((raw, i) => {
       // Normalise the tax code to its market's shape first — Excel strips the leading zero
       // off a Vietnamese code, and the padded form is what matches an existing record.
       const data = { ...raw, bizId: C.formatBizId(raw.bizId, raw.country) };
-      // Dedup on Business ID (TIN) only — not name / short name. Rows without a
-      // Business ID are always imported (no reliable key to match on).
-      const existing = C.findByBizId(data.bizId, all);
+      // Business ID (TIN) first; without a match there, the same company name in the same
+      // country (filling in the Business ID when the file has one and the record doesn't).
+      let existing = C.findByBizId(data.bizId, all);
+      if (!existing) { existing = byNameMatch(data); if (existing) matchedByName++; }
       if (existing) {
         // Overwrite whatever the file actually carries (PIC, owner, phone, address, status…)
-        // and leave the rest of the record alone. A later row for the same TIN wins.
+        // and leave the rest of the record alone. A later row for the same company wins.
         const patch = {};
         Object.keys(data).forEach(k => {
           if (KEEP[k]) return;
@@ -575,9 +595,15 @@ function AppProvider({ children, tweaks }) {
         });
         if (patch.status) patch.funnel = data.funnel || C.STATUS_TO_FUNNEL[patch.status] || existing.funnel || "New";
         if (Object.keys(patch).length) {
-          patchById[existing.id] = { ...(patchById[existing.id] || {}), ...patch };
+          // A record created earlier in this file is patched in place (it is written below).
+          const fresh = added.findIndex(c => c.id === existing.id);
+          if (fresh >= 0) added[fresh] = { ...added[fresh], ...patch };
+          else patchById[existing.id] = { ...(patchById[existing.id] || {}), ...patch };
           updated++;
-          all = all.map(c => c.id === existing.id ? { ...c, ...patch } : c);
+          const next = { ...existing, ...patch };
+          all = all.map(c => c.id === existing.id ? next : c);
+          if (nameKey(next) !== nameKey(existing)) { const ok = nameKey(existing); if (byName[ok]) byName[ok] = byName[ok].filter(c => c.id !== existing.id); }
+          index(next);
         } else {
           skipped++; if (data._row) issues.push({ row: data._row, code: "dup" });
         }
@@ -595,7 +621,7 @@ function AppProvider({ children, tweaks }) {
         funnel, created: data.created || new Date().toISOString().slice(0, 10), _updated: NOW(),
       };
       if (!cust.nameCode) cust.nameCode = C.suggestNameCode(cust.name) || cust.shortName || "";
-      added.push(cust); all = all.concat([cust]);
+      added.push(cust); all = all.concat([cust]); index(cust);
     });
     const ids = Object.keys(patchById);
     if (added.length || ids.length) {
@@ -618,9 +644,9 @@ function AppProvider({ children, tweaks }) {
       setExtras(nextExtras); C.saveJSON(C.LS.extras, nextExtras);
       const touched = [...added, ...nextExtras.filter(c => patchById[c.id])];
       if (touched.length) syncRows("customers", touched);
-      addActivity({ user: user ? (user.salesCode || user.name) : "?", action: "added", target: added.length + " customers (CSV import)", detail: updated + " updated · " + skipped + " skipped" });
+      addActivity({ user: user ? (user.salesCode || user.name) : "?", action: "added", target: added.length + " customers (CSV import)", detail: updated + " updated · " + skipped + " skipped · " + matchedByName + " matched by name" });
     }
-    return { imported: added.length, updated, skipped, issues };
+    return { imported: added.length, updated, skipped, matchedByName, issues };
   };
 
   // log a contact attempt (Cold call / Line / Email / Visit) — updates contactHistory + lastContactDate

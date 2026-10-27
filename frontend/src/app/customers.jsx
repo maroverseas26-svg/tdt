@@ -997,6 +997,7 @@ function ImportCSVModal({ onClose }) {
           <div className="import-report-icon">{report.skipped > 0 ? "!" : "\u2713"}</div>
           <h3>{report.skipped > 0 ? t("im_done_partial") : t("im_done")}</h3>
           <p><strong>{report.imported}</strong> {t("im_imported")} · <strong>{report.updated || 0}</strong> {t("im_updated")} · <strong>{report.skipped}</strong> {t("im_skipped")}</p>
+          {report.matchedByName > 0 && <p className="dim">{t("im_matched_name").replace("{n}", String(report.matchedByName))}</p>}
           <div className="modal-actions" style={{ justifyContent: "center" }}>
             {report.issues && report.issues.length > 0 && (
               <button className="btn btn-ghost" onClick={() => downloadIssues(report.issues)}>

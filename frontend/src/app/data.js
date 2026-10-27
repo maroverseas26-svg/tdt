@@ -1663,7 +1663,7 @@
   ].filter(f => f.customerId).map((f, i) => ({ forecastId: "FC-" + String(i + 1).padStart(3, "0"), ...f }));
 
   window.CRM = {
-    normName, canonCodeFn, normCountry, normGroup, cleanCode, baseCode, kpiCountryOf, KPI_NONE, poPricing, rollArea, findDuplicates, parseCSV, readImportFile, parseDate, toISO, normalizePOs, SB, API, RESET_FN_BASE,
+    normName, canonCodeFn, normCountry, normGroup, cleanCode, baseCode, kpiCountryOf, KPI_NONE, poPricing, rollArea, findDuplicates, normBizId, parseCSV, readImportFile, parseDate, toISO, normalizePOs, SB, API, RESET_FN_BASE,
     nameCodeOf, nameCodeKey, suggestNameCode, nameCodeGroups, parentMapOf, findByBizId, formatBizId, bizIdIssue, invInUse, distinctInvoices, logText,
     STATUS_TO_FUNNEL, STAGES, STAGE_KEY, STAGE_COLORS, STAGE_DEFAULT_STATUS, ALL_STATUSES,
     MODULES, MARKETS, SEED_USERS, SEED_ROLES, SEED_PROJECTS, PROJECT_STAGES, PROJECT_STAGE_COLORS, INK_TYPES,
