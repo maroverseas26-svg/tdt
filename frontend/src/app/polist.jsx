@@ -1043,8 +1043,18 @@ function POFormModal({ onClose, presetCustomerId, presetFromQuote, asPage }) {
     };
   };
   const blankItem = { productId: "", productCode: "", structureCode: "", sku: "", grade: "", productType: "FR", width: "", length: "", sqmPerRoll: "", qty: "", price: "", edpCode: "" };
+  // The customer picker has one option per Name Code (its head office, else the first by
+  // name): a quote made out to a branch opens on that Name Code's option.
+  const parentIdOf = (cid) => {
+    const c0 = scopeCustomers.find(x => x.id === cid);
+    if (!c0) return cid || "";
+    const k = PO.nameCodeKey(PO.nameCodeOf(c0));
+    const list = scopeCustomers.filter(x => PO.nameCodeKey(PO.nameCodeOf(x)) === k)
+      .sort((a, b) => (a.shortName || a.name).localeCompare(b.shortName || b.name));
+    return (list.find(x => /head\s*office/i.test(x.name || "")) || list[0] || c0).id;
+  };
   const [f, setF] = useState({
-    customerId: presetFromQuote ? presetFromQuote.customerId : (presetCustomerId || ""),
+    customerId: presetFromQuote ? parentIdOf(presetFromQuote.customerId) : (presetCustomerId || ""),
     group: "E", pic: isBoss ? "" : (user.salesCode || ""),
     items: quoteItems.length ? quoteItems.map(lineFromQuote) : [blankItem],
     poNumber: "", poDate: today, date: today, invNo: "",
