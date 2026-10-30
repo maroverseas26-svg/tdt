@@ -712,6 +712,20 @@ The form code has not been seen yet; §13.5 lists the files needed. Use one of t
 | M3 | P2 | The EN home page shows the alert **"Updating Write post"** in place of the news slider, because the EN blog has no articles. | An empty block with broken English on the EN home page. | Point `en_handle_home_blog` to a blog with articles, or hide the section. |
 | M4 | P2 | The copies are just as heavy: EN home 854,278 B and TH home 866,750 B, with the same inline jQuery and the same `optimize_head` (f1genz). | Same performance cost as VI. | Covered by the T4/T9 fixes, ×3 until T12. |
 | M5 | info | `layout/en.liquid` still contains IE6–IE9 conditional comments and a commented-out GTM container `GTM-NP8HFM8`. | Dead code. | Remove in T12. |
+| M6 | P1 | The `multilanguage` snippet (8,938 B, inline near the end of `<body>` on every page) saves the chosen language in `localStorage.template`. On **every page load** it checks: if a language is saved and the URL has no `?view=`, it runs `window.location.href = url + '?view=' + lang`. Internal links never carry `?view=`, so the redirect fires on every page. Picking a language in the menu always runs `window.location.href = "/"`. | **Double page load:** anyone who has picked EN or TH (or picked "VI" in the menu, which redirects to `?view=vi`) downloads and parses the full VI page (≈ 900 KB HTML plus scripts) and then loads the page again. Changing language also drops the visitor on the home page. Googlebot has no saved language and always sees VI, so rankings aren't directly hit, but real-user speed data (CrUX/Core Web Vitals) includes these double loads. | **T11:** move the language check into a tiny script at the very top of `<head>`, so the browser leaves before downloading and parsing the page, and keep the visitor on the current page when switching. **T12:** see the options in §13.5b. |
+
+### 13.5b Options for the language versions
+
+| Option | What it means | Speed | Search | Effort |
+|---|---|---|---|---|
+| A. Drop EN/TH on todaytec.com.vn | Remove the language menu and script and the `en_*`/`th_*` files. Send English visitors to todaytec.com and Thai visitors to the Todaytec TH channel. | No double loads; one copy to maintain. | No change (EN/TH are not indexed today). | S–M |
+| B. One code base, three display languages | One set of templates and snippets; interface text from `locales/` or per-language settings. `index.en.liquid` / `index.th.liquid` become one-line wrappers around shared snippets. The language is added to internal links server-side, so there is no client-side redirect. | No double loads; fixes made once. | Still no EN/TH search traffic: same URLs, and product data only in Vietnamese. | M–L (fits the T12 rebuild) |
+| C. Real Thai/English SEO | Separate URLs with their own titles, descriptions and content, plus reciprocal hreflang. On Haravan that means a separate store or site (e.g. a Thai site for Todaytec TH), or relying on todaytec.com for English. | Depends on the build. | Thai/English search traffic becomes possible. | L, a separate project |
+
+**Recommendation:**
+- **T11:** fix the M6 redirect only.
+- **T12:** choose A, unless GA4 shows meaningful use of `?view=en` / `?view=th`; in that case choose B. Pull "Page path + query string" for the last 90 days.
+- **C** only if Boss confirms the TH or EN market needs organic search (slide 33, decision 05).
 
 ### 13.5 Files still needed, in priority order
 
@@ -723,8 +737,9 @@ The form code has not been seen yet; §13.5 lists the files needed. Use one of t
 | 4 | `snippets/seo_head.liquid`, `snippets/fb-open-graph-tags.liquid` | Meta description, `og:price` 0, Product microdata in the head (#8, #9c, B8) |
 | 5 | `snippets/popup-contact.liquid`, `snippets/footer.liquid`, `templates/page.contact.liquid`, the product-page sample and datasheet forms | Correct lead event (#2) |
 | 6 | `templates/product.liquid`, `templates/collection.liquid`, `templates/article.liquid`, `snippets/product-loop.liquid`, `snippets/article-loop.liquid` | Schema, CLS, alt text, home product grid (#9, #12, #15, I3) |
-| 7 | `layout/en.liquid`, `layout/th.liquid` | Repeat T1 and T3–T8 |
-| 8 | Optional: `config/settings_data.json` | Every home setting, including the tile links (I2) |
+| 7 | Optional: `config/settings_data.json` | Every home setting, including the tile links (I2) |
+
+`layout/en.liquid`, `layout/th.liquid`, `index.en.liquid` and `index.th.liquid` were received on 30/10 (§13.5a).
 
 ---
 
