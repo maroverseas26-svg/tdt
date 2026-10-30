@@ -930,3 +930,28 @@ The conversion ping `https://www.google.com/measurement/conversion?…tid=G-M1ES
   - Two CSS files.
 - Delay between requests: 1.5–2.5 s.
 - Scripts and raw JSON stayed in the session scratchpad and are not committed.
+
+## 14. AI Search (Google AI Overview), added 30/10
+
+**Example (Boss's screenshot)**, a query about barcode ribbons for garment factories in Vietnam:
+- The AI Overview cites todaytec.com.vn.
+- It lists Todaytec among *distributors* ("Sino AutoID, Todaytec, VTN Barcode"), not among the brands (Ricoh, Armor-Inkanto, DNP, Zebra, ITW).
+- Its Wax / Wax-Resin breakdown cites Xprinter.
+
+**On-site causes:**
+- The garment articles close with "Todaytec – Cung cấp ribbon uy tín" and never name Hangzhou Todaytec or the factory.
+- `/blogs/news/ung-dung-wash-care-ribbon` and `/blogs/news/todaytec-giai-phap-in-nhan-mac-ben-dep-cho-nganh-may-mac-da-giay` have no tables.
+- Specs are often images.
+- The old Wash Care URLs return 404 (§4).
+
+**Plan** (deck slides 24, 25, 31):
+- **T11:** the manufacturer sentence everywhere, plus Organization JSON-LD. A weekly check of 20 queries. Bing Webmaster Tools.
+- **T11–T12:** a model garment page (direct answer, table "tem → ribbon → mã Todaytec", specs as text, FAQ, author and date), then logistics and food.
+- **From T12:** third-party mentions (trade press, VITAS, partners, customer cases, YouTube).
+
+**Measurement limit found:**
+- `serper_rank` v10 records the top-level keys of each Serper response.
+- On the 30/10 run (42 keywords, `gl=vn`, `hl=vi`), every response contained only `organic`, `searchParameters` and `credits`. There was no `aiOverview`, `peopleAlsoAsk` or `answerBox`, so all 42 rows have `ai_overview = null` (not measured).
+- The cockpit view `seo.vw_seo_serp_feature` still reports 144 keywords as "Không" for AI Overview and PAA. These come from pre-v9 rows where a missing field was stored as `false`, so the 0 % shown is not a real measurement.
+- AI Overview tracking therefore needs a manual weekly check or a SERP API that returns AI Overviews; quote needed.
+- GSC (`seo.seo_gsc_page_daily`) has never recorded a `?view=en` or `?view=th` URL. Only one `?view=vi` URL appears, with 4 impressions. This confirms §13.5a M1.
