@@ -397,6 +397,7 @@ The .com shots were taken with a tall viewport after a scroll pass. In a full-pa
 - **Owner roles:** Dev (Haravan theme developer), SEO, Content, Design.
 - **Effort:** S ≤ 1 day · M 2–5 days · L > 1 week.
 - **File paths** are Haravan theme files. Template names were seen in the source; snippet names are guesses until we have theme access (§12).
+- **Update 30/10:** `layout/theme.liquid` and `templates/index.liquid` were reviewed from the real code. §13 gives the exact locations for rows #2, #5, #7, #9a, #10, #11, #13 and #14, plus a ready-to-paste layout. It also adds a new item: the Meta Pixel is installed twice (T2).
 
 | # | Pri | Issue | Evidence | Fix (Haravan location) | Owner | Effort | Expected impact | Month |
 |---|---|---|---|---|---|---|---|---|
@@ -579,6 +580,131 @@ The .com shots were taken with a tall viewport after a scroll pass. In a full-pa
 7. **A pricing decision:** publish indicative prices (enables Offer markup) or stay "Liên hệ báo giá" (no Offer).
 8. **Rank-tracker settings** (location, device, URL match), because GSC disagrees for "ribbon wax" (position 2.7) and "ruy băng mực in mã vạch" (position 4.3).
 9. Optional: a **contact at HQ or HANSUN** for todaytec.com, if reciprocal hreflang or .com fixes are wanted.
+
+---
+
+## 13. Theme code review: `layout/theme.liquid` and `templates/index.liquid` (30/10/2026)
+
+**Source:** the code Boss pasted from the Haravan code editor (theme "New multilanguage"), cross-checked against the live HTML of `/` fetched on 30/10. Byte offsets refer to that live HTML.
+
+**Theme structure seen in the editor:**
+- Layouts: `theme.liquid`, `en.liquid`, `th.liquid`.
+- Templates come with `.en` / `.th` variants: `404`, `article`, `blog`, `cart`, `cart.reload`, `collection.data`, `index`, `index.header-style-01/02/03`, `index.load-menu`, `index.load-notify` and others.
+- Folders: Assets, Snippets, Config, Locales.
+
+Every layout fix below must also be applied to `en.liquid` and `th.liquid`. Search for the same strings there.
+
+### 13.1 Findings confirmed in code
+
+| ID | Sev | File → code to search for | What it does | Fix | Plan row |
+|---|---|---|---|---|---|
+| T1 | P0 | `theme.liquid` → `gtag('event', 'conversion_event_submit_lead_form'` (right after the GA4 config) | Runs unconditionally in `<head>`, so every page view is a "lead". **Root cause of E1 confirmed.** | Delete it, then fire the event only on a successful form submit (§13.3). GA4 and Ads lead counts will drop sharply after the fix; the lower number is the real one. | #2 |
+| T2 | P1 | `theme.liquid` → `fbq('init', '31050256297898923')` at the top of `<head>` | Haravan's Marketing integration injects the **same pixel** again through `content_for_header`: `fbq('init', "31050256297898923", {} , {'agent':'plharavan'}); fbq('track', 'PageView');` at byte 411,471. In normal browsers that means two `init` and two `PageView` calls per page. GA4 `G-M1ES2Z5T5J` is also configured twice (bytes 976 and 410,887), although the audit run saw only one `page_view` (E2). | Check with Meta Pixel Helper or Events Manager → Test events. If PageView is doubled, keep **one** source: either delete the hand-pasted block or turn off the Haravan integration. Haravan's version also sends ecommerce events. **New.** | new |
+| T3 | P2 | `theme.liquid` → `<meta charset="utf-8"/>` | The charset sits after about 1.1 KB of pixel and gtag code (byte 1,173). The HTML spec requires it within the first 1,024 bytes. | Move the charset and viewport to the first lines after `<head>`. **New.** | new |
+| T4 | P1 | `theme.liquid` → `/*! jQuery v3.5.1` | The whole jQuery file is inlined in the head (89,481 bytes). `master-include` loads `jquery-3.5.1.min.js` again, synchronously, at byte 390,968. Only CSS sits between the two copies, with no jQuery call before the external file. | Delete the inline copy. This is safe and saves 89 KB on every page. | #11 |
+| T5 | P1 | `theme.liquid` → `{%- if template contains 'article' -%}{%- if robots contains 'noindex'…` | `meta robots` is printed only on articles, so no other template can ever be noindexed. **Root cause of A3/A4.** | Use the generalised robots block in the patched layout (§13.2). | #5 |
+| T6 | P2 | `theme.liquid` → `<link rel="canonical" href="{{ canonical_url }}" />` | Printed unconditionally. The result is `href=""` on 404 pages (A8) and a page-1 canonical on `?page=N` (A7). | Skip it on 404 and append `?page=N` (patched layout). | #13, #14 |
+| T7 | P1 | `theme.liquid` → `"@type":"WebSite","name":"{{shop.url \| remove…` and `<body … itemscope itemtype="http://schema.org/Website">` | The only JSON-LD names the site after its domain and carries the retired SearchAction. Body-level microdata wraps the whole page. | Use an `Organization` + `WebSite` `@graph` and remove the body microdata (patched layout). | #9a |
+| T8 | P2 | `theme.liquid` → `meta name="keywords"`, `revisit-after`, `HandheldFriendly` | Google ignores all three. | Remove. | — |
+| T9 | P0 | `theme.liquid` → the `content_for_header` rewrite (`syntax1_new = "if(f1genzPS){"`, `nosrc=` swaps) | Haravan's `//<![CDATA[` is replaced with `if(f1genzPS){`, and the gtag and beacon `src` become `nosrc`. Every Haravan head script therefore depends on the f1genz flag (defined in `optimize_head` or `master-include`). **Mechanism of D2 confirmed.** | **Not changed in the patched layout.** It has to be reviewed together with `optimize_head`, `footer-scripts` and `assets/optimize_async.js`; otherwise tracking and apps can break. | #4 |
+| T10 | P2 | `theme.liquid` → `{%- include 'modal-coupon' -%}` | On every page this prints `<h2>Khuyến mãi dành cho bạn</h2>` and an unrendered `<h3>${title}</h3>` (a JS template), which adds junk headings to every page outline. It is the B2C coupon UI noted in D7. | Remove the include if coupons are not used for B2B. This is a business decision, so it is left as is in the patched layout. **New.** | #20 |
+| T11 | info | `theme.liquid` → `replace:  remove: stylenofity` | A filter-chain typo; it should be `remove: stylenofity`. No visible effect today, since `notification.css` and `notification.js` are absent from the live HTML. | Leave it; fix it whenever that block is touched. | — |
+| I1 | P1 | `index.liquid` | The template has no `<h1>`. Headings run `<h3>{{ settings.title_home_category }}</h3>` → `<h2>{{ settings.title_home_intro }}</h2>` (renders "TODAYTEC") → blog `<h3>`. The only H1 is the hidden one in the `header` snippet. | §13.4 | #7 |
+| I2 | P1 | `index.liquid` → `settings[link]` with `link_item_tab_{i}_category_{j}` | The category tiles ("DANH MỤC NGÀNH HÀNG") get their links from theme settings. Live, they have 32 unique targets, **all `/blogs/news/…` articles**, 11 of them with `?view=vi`. **All 34 `?view=vi` links on the home page (A9) come from these settings.** This is part 1 of the B5 root cause. | No code change: in Customize theme → Danh mục ngành hàng, remove `?view=vi` and point the tiles to the series collections or the `/pages/ung-dung-…` application pages. Link the articles from those pages instead. | #10 |
+| I3 | P1 | `index.liquid` → `{%comment%}` before `display_home_banner` | The product sections (`display_home_collection_1/2`) and the banner and policy blocks are all commented out, so the home page has no product grid and **0 `/products/` links**. This is part 2 of the B5 root cause. | §13.4 | #10 |
+| I4 | P2 | `index.liquid` → `owl-lazy`, `lazyload`, `--bg-img-intro` | Tiles use `<img class="owl-lazy" data-src=…>` with no `src`, `width` or `height`; the intro image is the same. The intro background `background.png` is a 379,371-byte PNG. | Add `width`/`height` and `alt="{{ … \| escape }}"`; convert the background to WebP or JPG ≤ 80 KB. | #15 |
+| I5 | — | `index.liquid` → `{%- include 'homepage-slider' -%}` | The 20.7 MB hero video lives in that snippet, not in `index.liquid`. | The snippet is needed for #3. | #3 |
+
+### 13.2 Ready-to-paste layout: `docs/seo/theme-fixes/layout-theme.liquid`
+
+A full replacement for `layout/theme.liquid`, made from Boss's paste with T1, T3, T4, T5, T6, T7 and T8 applied.
+
+**Left unchanged:**
+- the f1genz / `content_for_header` block (T9);
+- both pixels (T2: verify first);
+- every include, including `modal-coupon` (T10);
+- the body markup apart from the removed `itemscope`.
+
+**Checked here:**
+- the JSON-LD parses as valid JSON once the Liquid values are substituted;
+- the Liquid `if`, `unless`, `capture` and `comment` tags are balanced.
+
+It has **not** been rendered on Haravan, because we have no access. So:
+
+1. Duplicate the live theme. Paste the file into the copy's `layout/theme.liquid` and preview it.
+2. Check in view-source or DevTools:
+   - `<meta charset` is the first tag in `<head>`.
+   - `conversion_event_submit_lead_form` no longer fires on page load (GA4 DebugView or Tag Assistant).
+   - `/collections/all`, `/pages/frontpage`, `/blogs/all/tagged/wax-ribbon` and `/collections/types?q=premium-enhanced-resin-ribbon` show `<meta name="robots" content="noindex,follow">`. Series collections, products and articles do **not**.
+   - `/collections/muc-in-ma-vach-wax?page=2` has canonical `…/muc-in-ma-vach-wax?page=2`.
+   - A 404 URL has no canonical tag.
+   - The Rich Results Test on `/` finds Organization with no errors.
+   - The console shows no jQuery errors. The menu, slider, category tabs, contact popup, cart drawer and forms all work.
+3. Publish. Apply the same edits to `layout/en.liquid` and `layout/th.liquid`.
+
+**Haravan Liquid assumptions:** `canonical_url`, `current_page`, `current_tags`, `collection.handle` and `page.handle` follow the Shopify-style objects. The existing title tag already uses `current_page` and `current_tags`. How `/collections/types` resolves is unverified, so the robots block also matches on `canonical_url`.
+
+### 13.3 Firing the lead event correctly (replaces T1)
+
+The form code has not been seen yet; §13.5 lists the files needed. Use one of two patterns.
+
+**(a) Liquid form that reloads after submit.** Put this inside the form block. `form.posted_successfully?` is Shopify syntax, so confirm it in the Haravan form snippet.
+
+```liquid
+{%- if form.posted_successfully? -%}
+<script>window.addEventListener('load', function(){ if (typeof gtag === 'function') gtag('event', 'conversion_event_submit_lead_form', { form_location: 'contact_page' }); });</script>
+{%- endif -%}
+```
+
+**(b) AJAX form.** Call `gtag('event', 'conversion_event_submit_lead_form', { form_location: '…' })` in the success callback only.
+
+**Notes:**
+- Keep the event name, so the existing Google Ads conversion mapping still works.
+- In Google Ads, set the conversion to **Secondary** until it has two weeks of clean data.
+- `ads_conversion_Contact_Page_load_today_1` also fires on page load. Treat it as a micro-conversion, never as the primary one.
+
+**Where to place it:**
+- `popup-contact` (home);
+- `templates/page.contact.liquid`;
+- the product-page "Đăng ký nhận mẫu thử" and "Tải thông số kỹ thuật" forms;
+- the footer newsletter (`footer` snippet), but only if a newsletter sign-up counts as a lead.
+
+### 13.4 `templates/index.liquid` edits
+
+1. **Visible H1 (I1).** After `{%- if settings.home_slider_show -%} {%- include 'homepage-slider' -%} {%- endif -%}`, add:
+   ```liquid
+   <div class="container-fluid">
+   	<h1 class="home-h1">Mực in mã vạch – Ruy băng in mã vạch chính hãng Todaytec</h1>
+   </div>
+   <style>.home-h1{font-family:Roboto,sans-serif;font-weight:700;font-size:28px;line-height:1.3;color:#062741;text-align:center;margin:32px 0 0}@media(max-width:767px){.home-h1{font-size:22px;margin-top:20px}}</style>
+   ```
+   In the same publish, change the hidden `<h1 style="display:none">` in the `header` snippet to a `<div>`. Otherwise the home page has two H1s.
+2. **Heading levels.**
+   - Change `<h3>{{ settings.title_home_category }}</h3>` and the blog `<h3>` to `<h2>`.
+   - In `assets/style-themes.scss.css`, add `h2` to every selector that targets `.sectionHeading h3`, so the look does not change.
+   - In Customize, change `title_home_intro` from "TODAYTEC" to a descriptive line, e.g. "Về Todaytec – nhà sản xuất ribbon mực in mã vạch".
+3. **Images (I4).**
+   - Intro: replace `<img class="dt-width-100 lazyload" data-src="{{'img_home_intro.jpg' | asset_url}}" alt="{{ settings.title_home_intro }}">` with `<img class="dt-width-100" src="{{'img_home_intro.jpg' | asset_url}}" loading="lazy" decoding="async" width="W" height="H" alt="{{ settings.title_home_intro | escape }}">`, where W×H is the real pixel size of the file.
+   - Tiles: add `width`/`height` and `| escape` on `alt`.
+   - Re-upload `background.png` as WebP or JPG.
+4. **Products on the home page (I3).**
+   - Move the `{%comment%}` line from before `display_home_banner` to just after the `display_home_collection_1` section's `{%- endif -%}`.
+   - In Customize, turn the section on with a "featured SKUs" collection (8 products).
+   - Review `snippets/product-loop.liquid` first, so the cards show no "0₫" price or cart button.
+5. **Tile links (I2):** a settings-only change; see I2.
+
+### 13.5 Files still needed, in priority order
+
+| # | File(s) | For |
+|---|---|---|
+| 1 | `snippets/header.liquid` | Hidden H1, logo microdata (#7) |
+| 2 | `snippets/homepage-slider.liquid` | The 20.7 MB video (#3) |
+| 3 | `snippets/optimize_head.liquid`, `snippets/master-include.liquid`, `snippets/footer-scripts.liquid`, `assets/optimize_async.js` | f1genz and the 790 KB of inline CSS/JS (#4, #11) |
+| 4 | `snippets/seo_head.liquid`, `snippets/fb-open-graph-tags.liquid` | Meta description, `og:price` 0, Product microdata in the head (#8, #9c, B8) |
+| 5 | `snippets/popup-contact.liquid`, `snippets/footer.liquid`, `templates/page.contact.liquid`, the product-page sample and datasheet forms | Correct lead event (#2) |
+| 6 | `templates/product.liquid`, `templates/collection.liquid`, `templates/article.liquid`, `snippets/product-loop.liquid`, `snippets/article-loop.liquid` | Schema, CLS, alt text, home product grid (#9, #12, #15, I3) |
+| 7 | `layout/en.liquid`, `layout/th.liquid` | Repeat T1 and T3–T8 |
+| 8 | Optional: `config/settings_data.json` | Every home setting, including the tile links (I2) |
 
 ---
 
