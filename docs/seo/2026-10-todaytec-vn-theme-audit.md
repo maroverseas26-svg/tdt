@@ -693,6 +693,26 @@ The form code has not been seen yet; §13.5 lists the files needed. Use one of t
    - Review `snippets/product-loop.liquid` first, so the cards show no "0₫" price or cart button.
 5. **Tile links (I2):** a settings-only change; see I2.
 
+### 13.5a Three copies of the theme: VI, EN, TH (from `layout/en.liquid`, `layout/th.liquid`, `index.en.liquid` and `index.th.liquid`, checked live on 30/10)
+
+**How it works:**
+- English and Thai are copies of the Vietnamese theme. Each has its own layout (`en.liquid`, `th.liquid`), templates (`*.en.liquid`, `*.th.liquid`), snippets (`en_header`, `th_footer`, `en_seo_head`, `th_master-include`…) and theme settings (`en_*`, `th_*`).
+- Visitors switch language with `?view=en` / `?view=th` on the **same URLs**, through a JS language picker (`data-lang`).
+- So every fix has to be made three times, and the copies have already drifted apart.
+
+| ID | Sev | Evidence (live, 30/10) | Impact | Proposal |
+|---|---|---|---|---|
+| M1 | P1 | On `/?view=en`, `/?view=th`, `/collections/muc-in-ma-vach-wax?view=en` and `?view=th`: the canonical points to the VI URL, the `<title>` and meta description stay **Vietnamese**, hreflang lists only `vi-vn`, and the HTML has 0 crawlable links to `?view=en/th` (the switcher is JS). | **The EN and TH versions are invisible to Google.** They bring no English or Thai search traffic; they only serve visitors who click the switcher. Product, collection and article data (titles, SEO fields) exists only once, in Vietnamese. | **T11:** no SEO work on EN/TH. Keep VI as the only indexed version, which is what canonical already does. **Boss to decide:** do we want Thai or English search traffic? If yes, it needs real separate URLs with their own content (e.g. a Thai site for Todaytec TH, with todaytec.com covering EN), not `?view=`. |
+| M2 | P1 | Drift between the copies: | The same theme behaves differently per language, and fixes made in one copy don't reach the others. | Fix all three in T11. In T12, replace the copies with **one template set plus `locales/` translation files** (the theme already has a Locales folder), or drop EN/TH if M1 is decided against. |
+| | | • **Lead event:** VI and TH fire `conversion_event_submit_lead_form` on page load; EN does not. | | |
+| | | • **Head tracking:** EN has no hand-pasted GA4/Meta snippet and no `content_for_header` rewrite. VI and TH have both. | | |
+| | | • **Language attribute:** EN and TH declare `<html lang="vi">`. For EN the `lang="en"` sits only inside old-IE conditional comments. | | |
+| | | • **EN viewport:** declared twice, with `maximum-scale=1.0, user-scalable=0`, which blocks pinch zoom. | | |
+| | | • **EN home markup:** 8 tab links share `id="home-tab"`, all with `aria-selected="true"`. | | |
+| M3 | P2 | The EN home page shows the alert **"Updating Write post"** in place of the news slider, because the EN blog has no articles. | An empty block with broken English on the EN home page. | Point `en_handle_home_blog` to a blog with articles, or hide the section. |
+| M4 | P2 | The copies are just as heavy: EN home 854,278 B and TH home 866,750 B, with the same inline jQuery and the same `optimize_head` (f1genz). | Same performance cost as VI. | Covered by the T4/T9 fixes, ×3 until T12. |
+| M5 | info | `layout/en.liquid` still contains IE6–IE9 conditional comments and a commented-out GTM container `GTM-NP8HFM8`. | Dead code. | Remove in T12. |
+
 ### 13.5 Files still needed, in priority order
 
 | # | File(s) | For |
