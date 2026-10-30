@@ -742,6 +742,20 @@ The form code has not been seen yet; §13.5 lists the files needed. Use one of t
 2. **T12, option B, reduced to VI + EN:** one code base with `locales/`. Delete the `th_*` copy. Keep EN for English-reading buyers in Vietnam (FDI factories); it stays non-indexed under the same URLs.
 3. **Cross-domain hreflang** (`vi` on .com.vn ↔ `th` on .co.th) only on truly equivalent pages: home ↔ home, and series collections ↔ matching .co.th collections. The tags must be reciprocal on both sites.
 
+**Decided in the team chat, 30/10 22:25–22:29:**
+- **Thai is removed from the VN Haravan site.** Jenny: "bỏ Thái luôn", "chạy độc lập web VN thôi". todaytec.co.th is confirmed as the separately running Thai site.
+  - Boss's proposal: the Thai flag in the language menu links to `https://todaytec.co.th`.
+  - EN stays for now; option B covers VI + EN in T12.
+- **The team edits the theme from a zip export, not through Haravan support.** Trúc will show Boss how to export the theme on **Monday 02/11**.
+- **Workflow after export:**
+  1. Keep the original zip unchanged and put the code under version control in a **private** repository. This repo is public, and theme settings may hold keys.
+  2. Duplicate the live theme in Haravan.
+  3. Make the changes on the duplicate: remove the `th` layout, the `*.th` templates, the `th_*` snippets and settings, and the `th` entries in the `multilanguage` snippet. Then the T11 items.
+  4. Preview and QA, then publish.
+  5. Confirm that Haravan accepts a zip re-upload; otherwise paste the changed files in the code editor.
+- **T12:** UI and HTML structure aligned with todaytec.com (Jenny approved).
+- **Goal set by Jenny:** grow SEO.
+
 ### 13.5 Files still needed, in priority order
 
 | # | File(s) | For |
