@@ -1,0 +1,32 @@
+{
+  "permissions": {
+    "allow": [
+      "Write",
+      "Edit",
+      "NotebookEdit",
+      "mcp__Supabase__execute_sql",
+      "mcp__TDT_Database__execute_sql",
+      "mcp__PH_database__execute_sql",
+      "mcp__Cloudflare_Developer_Platform__d1_database_query",
+      "mcp__claude-code-remote__create_session",
+      "mcp__claude-code-remote__send_message",
+      "mcp__claude-code-remote__send_later",
+      "mcp__claude-code-remote__list_sessions",
+      "mcp__claude-code-remote__get_session",
+      "mcp__claude-code-remote__list_events",
+      "mcp__claude-code-remote__get_event",
+      "mcp__claude-code-remote__interrupt_session",
+      "mcp__claude-code-remote__set_session_title",
+      "mcp__claude-code-remote__set_session_tags",
+      "Agent",
+      "SendMessage",
+      "ListAgents",
+      "ReadNotifications",
+      "TaskCreate",
+      "TaskUpdate",
+      "TaskList",
+      "TaskGet"
+    ]
+  },
+  "crossSessionInbound": "accept"
+}
