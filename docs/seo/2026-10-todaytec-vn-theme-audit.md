@@ -727,6 +727,21 @@ The form code has not been seen yet; §13.5 lists the files needed. Use one of t
 - **T12:** choose A, unless GA4 shows meaningful use of `?view=en` / `?view=th`; in that case choose B. Pull "Page path + query string" for the last 90 days.
 - **C** only if Boss confirms the TH or EN market needs organic search (slide 33, decision 05).
 
+**Update 30/10 (Boss):** C is not possible on Haravan, which allows only one domain per store, and B looks better. Thailand is a live market. Boss mentions a domain "todaytec.th" that is not on Haravan.
+
+**What we found:**
+- `todaytec.th` does not resolve.
+- `todaytec.co.th` **is live**: a Shopify store (`b2asmj-fr.myshopify.com`, theme "v23-draft — 26Oct hero H1 LCP fix").
+  - `/` → 302 → `/th-int` (Thai) and `/en-int` (English), with hreflang `th`, `en` and `x-default`.
+  - Title "Todaytec Thailand", Thai H1 and meta description.
+  - 19 collections linked on the home page, including industry collections, and English-slug blog posts.
+  - Contact email `thuy.ttt@todaytec.com.vn`.
+
+**Proposal, pending Boss's confirmation that `todaytec.co.th` is the official Thai site:**
+1. **T11:** in the language menu on todaytec.com.vn, point "ไทย" to `https://todaytec.co.th/th-int` instead of `?view=th`.
+2. **T12, option B, reduced to VI + EN:** one code base with `locales/`. Delete the `th_*` copy. Keep EN for English-reading buyers in Vietnam (FDI factories); it stays non-indexed under the same URLs.
+3. **Cross-domain hreflang** (`vi` on .com.vn ↔ `th` on .co.th) only on truly equivalent pages: home ↔ home, and series collections ↔ matching .co.th collections. The tags must be reciprocal on both sites.
+
 ### 13.5 Files still needed, in priority order
 
 | # | File(s) | For |
